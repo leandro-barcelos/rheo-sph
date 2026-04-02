@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include <vulkan/vulkan_raii.hpp>
+#include <iostream>
 
 #include "renderer.h"
 #include "window.h"
@@ -8,11 +8,16 @@ int main() {
   constexpr window::Properties kWindowProperties{
       .width = 800, .height = 600, .title = "Rheo SPH"};
 
-  window::Window window{kWindowProperties};
-  render::Renderer vulkan;
-  vulkan.Init();
+  const window::Window window{kWindowProperties};
+  try {
+    render::Renderer vulkan;
+    vulkan.Init();
+  } catch (std::runtime_error &error) {
+    std::cerr << error.what() << '\n';
+    return EXIT_FAILURE;
+  }
 
-  while (!window.ShouldClose()) {
+  while (!window.ShouldClose()) {  // NOLINT(*-id-dependent-backward-branch)
     window::Window::PollEvents();
   }
 

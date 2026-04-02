@@ -6,7 +6,7 @@
 
 namespace render {
 
-const std::array kValidationLayers{"VK_LAYER_KHRONOS_validation"};
+constexpr std::array kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 
 #ifdef NDEBUG
 constexpr bool kEnableValidationLayers = false;
@@ -34,8 +34,9 @@ class Renderer {
   void PickPhysicalDevice();
   void CreateLogicalDevice();
 
-  uint32_t FindQueue(vk::QueueFlags flags,
-                     const std::unordered_set<uint32_t>& exclude = {}) const;
+  [[nodiscard]] uint32_t FindQueue(
+      vk::QueueFlags flags,
+      const std::unordered_set<uint32_t>& exclude = {}) const;
 };
 }  // namespace render
 

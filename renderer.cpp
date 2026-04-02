@@ -4,6 +4,7 @@
 #include <cstring>
 #include <iterator>
 #include <map>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -69,7 +70,7 @@ void render::Renderer::CreateInstance() {
 }
 
 void render::Renderer::PickPhysicalDevice() {
-  auto physical_devices = instance_.enumeratePhysicalDevices();
+  const auto physical_devices = instance_.enumeratePhysicalDevices();
 
   if (physical_devices.empty()) {
     throw std::runtime_error(
@@ -79,8 +80,8 @@ void render::Renderer::PickPhysicalDevice() {
   std::multimap<int, vk::raii::PhysicalDevice> candidates;
 
   for (const auto& physical_device : physical_devices) {
-    auto properties = physical_device.getProperties();
-    auto features = physical_device.getFeatures();
+    const auto properties = physical_device.getProperties();
+    const auto features = physical_device.getFeatures();
     uint32_t score = 0;
 
     if (properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
@@ -108,11 +109,11 @@ void render::Renderer::CreateLogicalDevice() {
   queue_create_infos.reserve(3);
 
   graphics_queue_index_ = FindQueue(vk::QueueFlagBits::eGraphics);
-  float graphics_queue_priority = 0.5f;
-  vk::DeviceQueueCreateInfo graphics_queue_create_info{
+  constexpr float kGraphicsQueuePriority = 0.5F;
+  const vk::DeviceQueueCreateInfo graphics_queue_create_info{
       .queueFamilyIndex = graphics_queue_index_,
       .queueCount = 1,
-      .pQueuePriorities = &graphics_queue_priority};
+      .pQueuePriorities = &kGraphicsQueuePriority};
   queue_create_infos.push_back(graphics_queue_create_info);
 
   compute_queue_index_ =
@@ -121,11 +122,11 @@ void render::Renderer::CreateLogicalDevice() {
     throw std::runtime_error(
         "[ERROR] Vulkan: failed to find a dedicated compute queue");
   }
-  float compute_queue_priority = 0.5f;
+  constexpr float kComputeQueuePriority = 0.5F;
   const vk::DeviceQueueCreateInfo compute_queue_create_info{
       .queueFamilyIndex = compute_queue_index_,
       .queueCount = 1,
-      .pQueuePriorities = &compute_queue_priority};
+      .pQueuePriorities = &kComputeQueuePriority};
   queue_create_infos.push_back(compute_queue_create_info);
 
   transfer_queue_index_ =
@@ -145,11 +146,11 @@ void render::Renderer::CreateLogicalDevice() {
                      vk::PhysicalDeviceVulkan13Features,
                      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
       feature_chain = {
-          {}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+          {}, {.dynamicRendering = VK_TRUE}, {.extendedDynamicState = VK_TRUE}};
 
   std::vector required_device_extensions = {vk::KHRSwapchainExtensionName};
 
-  vk::DeviceCreateInfo device_create_info{
+  const vk::DeviceCreateInfo device_create_info{
       .pNext = &feature_chain.get<vk::PhysicalDeviceFeatures2>(),
       .queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size()),
       .pQueueCreateInfos = queue_create_infos.data(),
@@ -177,14 +178,15 @@ uint32_t render::Renderer::FindQueue(
 
   uint32_t shared_queue_index = ~0U;
 
-  for (uint32_t i = 0; i < properties.size(); i++) {
-    if ((properties.at(i).queueFlags & flags)) {
-      if (!exclude.contains(i)) {
-        return i;
+  for (auto [queue_index, property] :
+       std::ranges::views::enumerate(properties)) {
+    if ((property.queueFlags & flags)) {
+      if (!exclude.contains(queue_index)) {
+        return queue_index;
       }
 
       if (shared_queue_index == ~0U) {
-        shared_queue_index = i;
+        shared_queue_index = queue_index;
       }
     }
   }

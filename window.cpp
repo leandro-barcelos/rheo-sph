@@ -6,9 +6,9 @@
 #include <iostream>
 #include <stdexcept>
 
-window::Window::Window(window::Properties properties) {
+window::Window::Window(const Properties properties) {
   if (glfwInit() == 0) {
-    throw std::runtime_error("GLFW: failed to intialize");
+    throw std::runtime_error("GLFW: failed to initialize");
   }
 
   glfwSetErrorCallback(window::Window::ErrorCallback);
@@ -31,7 +31,7 @@ void window::Window::ErrorCallback(int error, const char* description) {
   std::cerr << std::format("GLFW: [%d] %s\n", error, description) << '\n';
 }
 
-bool window::Window::ShouldClose() {
+bool window::Window::ShouldClose() const {
   return glfwWindowShouldClose(window_) != 0;
 }
 

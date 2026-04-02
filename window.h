@@ -27,7 +27,7 @@ class Window {
   explicit Window(Properties properties);
   ~Window();
 
-  bool ShouldClose();
+  [[nodiscard]] bool ShouldClose() const;
   static void PollEvents();
   static std::vector<const char*> GetRequiredExtensions();
 };
