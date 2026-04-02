@@ -16,6 +16,7 @@
 void render::Renderer::Init() {
   CreateInstance();
   PickPhysicalDevice();
+  CreateLogicalDevice();
 }
 
 void render::Renderer::CreateInstance() {
