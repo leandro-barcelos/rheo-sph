@@ -1,6 +1,7 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <unordered_set>
 #include <vulkan/vulkan_raii.hpp>
 
 namespace render {
@@ -23,11 +24,16 @@ class Renderer {
   vk::raii::PhysicalDevice physical_device_ = nullptr;
   vk::raii::Device device_ = nullptr;
   vk::raii::Queue graphics_queue_ = nullptr;
+  uint32_t graphics_queue_index_ = ~0;
   vk::raii::Queue compute_queue_ = nullptr;
+  uint32_t compute_queue_index_ = ~0;
 
   void CreateInstance();
   void PickPhysicalDevice();
   void CreateLogicalDevice();
+
+  uint32_t FindQueue(vk::QueueFlags flags,
+                     const std::unordered_set<uint32_t>& exclude = {}) const;
 };
 }  // namespace render
 

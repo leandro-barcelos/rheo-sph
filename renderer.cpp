@@ -102,40 +102,28 @@ void render::Renderer::PickPhysicalDevice() {
     throw std::runtime_error("[ERROR] Vulkan: failed to find a suitable GPU");
   }
 }
+
 void render::Renderer::CreateLogicalDevice() {
-  std::vector<vk::QueueFamilyProperties> queue_family_properties =
-      physical_device_.getQueueFamilyProperties();
-
-  const auto graphics_queue_family_property = std::ranges::find_if(
-      queue_family_properties, [](vk::QueueFamilyProperties const& qfp) {
-        return static_cast<bool>(qfp.queueFlags & vk::QueueFlagBits::eGraphics);
-      });
-
-  const auto graphics_index = static_cast<uint32_t>(std::distance(
-      queue_family_properties.begin(), graphics_queue_family_property));
+  graphics_queue_index_ = FindQueue(vk::QueueFlagBits::eGraphics);
+  compute_queue_index_ =
+      FindQueue(vk::QueueFlagBits::eCompute, {graphics_queue_index_});
 
   float graphics_queue_priority = 0.5f;
   vk::DeviceQueueCreateInfo graphics_queue_create_info{
-      .queueFamilyIndex = graphics_index,
+      .queueFamilyIndex = graphics_queue_index_,
       .queueCount = 1,
       .pQueuePriorities = &graphics_queue_priority};
 
-  const auto compute_queue_family_property = std::ranges::find_if(
-      queue_family_properties, [](vk::QueueFamilyProperties const& qfp) {
-        return static_cast<bool>(qfp.queueFlags & vk::QueueFlagBits::eCompute);
-      });
-
-  const auto compute_index = static_cast<uint32_t>(std::distance(
-      queue_family_properties.begin(), compute_queue_family_property));
-
   float compute_queue_priority = 0.5f;
-  vk::DeviceQueueCreateInfo compute_queue_create_info{
-      .queueFamilyIndex = compute_index,
+  const vk::DeviceQueueCreateInfo compute_queue_create_info{
+      .queueFamilyIndex = compute_queue_index_,
       .queueCount = 1,
       .pQueuePriorities = &compute_queue_priority};
 
-  std::vector queue_create_infos = {graphics_queue_create_info,
-                                    compute_queue_create_info};
+  std::vector queue_create_infos = {
+      graphics_queue_create_info,
+      compute_queue_create_info,
+  };
 
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan13Features,
@@ -143,8 +131,7 @@ void render::Renderer::CreateLogicalDevice() {
       feature_chain = {
           {}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
 
-  std::vector<const char*> required_device_extensions = {
-      vk::KHRSwapchainExtensionName};
+  std::vector required_device_extensions = {vk::KHRSwapchainExtensionName};
 
   vk::DeviceCreateInfo device_create_info{
       .pNext = &feature_chain.get<vk::PhysicalDeviceFeatures2>(),
@@ -155,6 +142,21 @@ void render::Renderer::CreateLogicalDevice() {
       .ppEnabledExtensionNames = required_device_extensions.data()};
 
   device_ = vk::raii::Device(physical_device_, device_create_info);
-  graphics_queue_ = vk::raii::Queue(device_, graphics_index, 0);
-  compute_queue_ = vk::raii::Queue(device_, compute_index, 0);
+  graphics_queue_ = vk::raii::Queue(device_, graphics_queue_index_, 0);
+  compute_queue_ = vk::raii::Queue(device_, compute_queue_index_, 0);
+}
+
+uint32_t render::Renderer::FindQueue(
+    const vk::QueueFlags flags,
+    const std::unordered_set<uint32_t>& exclude) const {
+  const std::vector<vk::QueueFamilyProperties> properties =
+      physical_device_.getQueueFamilyProperties();
+
+  for (uint32_t i = 0; i < properties.size(); i++) {
+    if ((properties[i].queueFlags & flags) && !exclude.contains(i)) {
+      return i;
+    }
+  }
+
+  throw std::runtime_error("[ERROR] Vulkan: failed to find a suitable queue");
 }
