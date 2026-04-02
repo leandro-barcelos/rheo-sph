@@ -135,7 +135,7 @@ void render::Renderer::CreateLogicalDevice() {
 
   std::vector queue_create_infos = {graphics_queue_create_info,
                                     compute_queue_create_info};
-  
+
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan13Features,
                      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
@@ -154,4 +154,6 @@ void render::Renderer::CreateLogicalDevice() {
       .ppEnabledExtensionNames = required_device_extensions.data()};
 
   device_ = vk::raii::Device(physical_device_, device_create_info);
+  graphics_queue_ = vk::raii::Queue(device_, graphics_index, 0);
+  compute_queue_ = vk::raii::Queue(device_, compute_index, 0);
 }
