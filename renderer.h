@@ -22,8 +22,8 @@ class Renderer {
   vk::raii::Instance instance_ = nullptr;
   vk::raii::PhysicalDevice physical_device_ = nullptr;
   vk::raii::Device device_ = nullptr;
-  vk::raii::Queue graphics_queue_;
-  vk::raii::Queue compute_queue_;
+  vk::raii::Queue graphics_queue_ = nullptr;
+  vk::raii::Queue compute_queue_ = nullptr;
 
   void CreateInstance();
   void PickPhysicalDevice();
