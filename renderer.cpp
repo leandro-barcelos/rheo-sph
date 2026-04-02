@@ -1,8 +1,8 @@
 #include "renderer.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -102,6 +102,56 @@ void render::Renderer::PickPhysicalDevice() {
   }
 }
 void render::Renderer::CreateLogicalDevice() {
-  vk::DeviceCreateInfo create_info{};
-  device_ = vk::raii::Device(physical_device_, create_info);
+  std::vector<vk::QueueFamilyProperties> queue_family_properties =
+      physical_device_.getQueueFamilyProperties();
+
+  const auto graphics_queue_family_property = std::ranges::find_if(
+      queue_family_properties, [](vk::QueueFamilyProperties const& qfp) {
+        return static_cast<bool>(qfp.queueFlags & vk::QueueFlagBits::eGraphics);
+      });
+
+  const auto graphics_index = static_cast<uint32_t>(std::distance(
+      queue_family_properties.begin(), graphics_queue_family_property));
+
+  float graphics_queue_priority = 0.5f;
+  vk::DeviceQueueCreateInfo graphics_queue_create_info{
+      .queueFamilyIndex = graphics_index,
+      .queueCount = 1,
+      .pQueuePriorities = &graphics_queue_priority};
+
+  const auto compute_queue_family_property = std::ranges::find_if(
+      queue_family_properties, [](vk::QueueFamilyProperties const& qfp) {
+        return static_cast<bool>(qfp.queueFlags & vk::QueueFlagBits::eCompute);
+      });
+
+  const auto compute_index = static_cast<uint32_t>(std::distance(
+      queue_family_properties.begin(), compute_queue_family_property));
+
+  float compute_queue_priority = 0.5f;
+  vk::DeviceQueueCreateInfo compute_queue_create_info{
+      .queueFamilyIndex = compute_index,
+      .queueCount = 1,
+      .pQueuePriorities = &compute_queue_priority};
+
+  std::vector queue_create_infos = {graphics_queue_create_info,
+                                    compute_queue_create_info};
+  
+  vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                     vk::PhysicalDeviceVulkan13Features,
+                     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
+      feature_chain = {
+          {}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+
+  std::vector<const char*> required_device_extensions = {
+      vk::KHRSwapchainExtensionName};
+
+  vk::DeviceCreateInfo device_create_info{
+      .pNext = &feature_chain.get<vk::PhysicalDeviceFeatures2>(),
+      .queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size()),
+      .pQueueCreateInfos = queue_create_infos.data(),
+      .enabledExtensionCount =
+          static_cast<uint32_t>(required_device_extensions.size()),
+      .ppEnabledExtensionNames = required_device_extensions.data()};
+
+  device_ = vk::raii::Device(physical_device_, device_create_info);
 }
