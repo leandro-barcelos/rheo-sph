@@ -105,15 +105,18 @@ void render::Renderer::PickPhysicalDevice() {
 
 void render::Renderer::CreateLogicalDevice() {
   graphics_queue_index_ = FindQueue(vk::QueueFlagBits::eGraphics);
-  compute_queue_index_ =
-      FindQueue(vk::QueueFlagBits::eCompute, {graphics_queue_index_});
-
   float graphics_queue_priority = 0.5f;
   vk::DeviceQueueCreateInfo graphics_queue_create_info{
       .queueFamilyIndex = graphics_queue_index_,
       .queueCount = 1,
       .pQueuePriorities = &graphics_queue_priority};
 
+  compute_queue_index_ =
+      FindQueue(vk::QueueFlagBits::eCompute, {graphics_queue_index_});
+  if (compute_queue_index_ == graphics_queue_index_) {
+    throw std::runtime_error(
+        "[ERROR] Vulkan: failed to find a dedicated compute queue");
+  }
   float compute_queue_priority = 0.5f;
   const vk::DeviceQueueCreateInfo compute_queue_create_info{
       .queueFamilyIndex = compute_queue_index_,
@@ -152,11 +155,23 @@ uint32_t render::Renderer::FindQueue(
   const std::vector<vk::QueueFamilyProperties> properties =
       physical_device_.getQueueFamilyProperties();
 
+  uint32_t shared_queue_index = ~0U;
+
   for (uint32_t i = 0; i < properties.size(); i++) {
-    if ((properties[i].queueFlags & flags) && !exclude.contains(i)) {
-      return i;
+    if ((properties.at(i).queueFlags & flags)) {
+      if (!exclude.contains(i)) {
+        return i;
+      }
+
+      if (shared_queue_index == ~0U) {
+        shared_queue_index = i;
+      }
     }
   }
 
-  throw std::runtime_error("[ERROR] Vulkan: failed to find a suitable queue");
+  if (shared_queue_index == ~0U) {
+    throw std::runtime_error("[ERROR] Vulkan: failed to find a suitable queue");
+  }
+
+  return shared_queue_index;
 }
