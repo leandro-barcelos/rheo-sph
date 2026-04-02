@@ -27,6 +27,8 @@ class Renderer {
   uint32_t graphics_queue_index_ = ~0;
   vk::raii::Queue compute_queue_ = nullptr;
   uint32_t compute_queue_index_ = ~0;
+  vk::raii::Queue transfer_queue_ = nullptr;
+  uint32_t transfer_queue_index_ = ~0;
 
   void CreateInstance();
   void PickPhysicalDevice();

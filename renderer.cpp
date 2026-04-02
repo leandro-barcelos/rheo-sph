@@ -104,12 +104,16 @@ void render::Renderer::PickPhysicalDevice() {
 }
 
 void render::Renderer::CreateLogicalDevice() {
+  std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
+  queue_create_infos.reserve(3);
+
   graphics_queue_index_ = FindQueue(vk::QueueFlagBits::eGraphics);
   float graphics_queue_priority = 0.5f;
   vk::DeviceQueueCreateInfo graphics_queue_create_info{
       .queueFamilyIndex = graphics_queue_index_,
       .queueCount = 1,
       .pQueuePriorities = &graphics_queue_priority};
+  queue_create_infos.push_back(graphics_queue_create_info);
 
   compute_queue_index_ =
       FindQueue(vk::QueueFlagBits::eCompute, {graphics_queue_index_});
@@ -122,11 +126,20 @@ void render::Renderer::CreateLogicalDevice() {
       .queueFamilyIndex = compute_queue_index_,
       .queueCount = 1,
       .pQueuePriorities = &compute_queue_priority};
+  queue_create_infos.push_back(compute_queue_create_info);
 
-  std::vector queue_create_infos = {
-      graphics_queue_create_info,
-      compute_queue_create_info,
-  };
+  transfer_queue_index_ =
+      FindQueue(vk::QueueFlagBits::eTransfer,
+                {graphics_queue_index_, compute_queue_index_});
+  if (transfer_queue_index_ != graphics_queue_index_ &&
+      transfer_queue_index_ != compute_queue_index_) {
+    constexpr float kTransferQueuePriority = 0.5F;
+    const vk::DeviceQueueCreateInfo transfer_queue_create_info{
+        .queueFamilyIndex = transfer_queue_index_,
+        .queueCount = 1,
+        .pQueuePriorities = &kTransferQueuePriority};
+    queue_create_infos.push_back(transfer_queue_create_info);
+  }
 
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan13Features,
@@ -147,6 +160,13 @@ void render::Renderer::CreateLogicalDevice() {
   device_ = vk::raii::Device(physical_device_, device_create_info);
   graphics_queue_ = vk::raii::Queue(device_, graphics_queue_index_, 0);
   compute_queue_ = vk::raii::Queue(device_, compute_queue_index_, 0);
+  if (transfer_queue_index_ == graphics_queue_index_) {
+    transfer_queue_ = graphics_queue_;
+  } else if (transfer_queue_index_ == compute_queue_index_) {
+    transfer_queue_ = compute_queue_;
+  } else {
+    transfer_queue_ = vk::raii::Queue(device_, transfer_queue_index_, 0);
+  }
 }
 
 uint32_t render::Renderer::FindQueue(
