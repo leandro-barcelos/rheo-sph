@@ -41,12 +41,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
 find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 
 function(compile_slang_shaders TARGET_NAME SHADER_FILE OUTPUT_DIR OUTPUT_SPIRV ENTRY_POINTS_LIST)
-        get_filename_component(OUTPUT_SPIRV_NAME "${OUTPUT_SPIRV}" NAME)
-        add_custom_command(
+  get_filename_component(OUTPUT_SPIRV_NAME "${OUTPUT_SPIRV}" NAME)
+  add_custom_command(
                 OUTPUT ${OUTPUT_DIR}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_DIR}
         )
-        add_custom_command(
+  add_custom_command(
                 OUTPUT ${OUTPUT_SPIRV}
                 COMMAND ${SLANGC_EXECUTABLE} ${SHADER_FILE} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS_LIST} -o ${OUTPUT_SPIRV_NAME}
                 WORKING_DIRECTORY ${OUTPUT_DIR}
@@ -54,10 +54,10 @@ function(compile_slang_shaders TARGET_NAME SHADER_FILE OUTPUT_DIR OUTPUT_SPIRV E
                 COMMENT "Compiling Slang Shaders: ${SHADER_FILE}"
                 VERBATIM
         )
-        add_custom_target(${TARGET_NAME} DEPENDS ${OUTPUT_SPIRV})
+  add_custom_target(${TARGET_NAME} DEPENDS ${OUTPUT_SPIRV})
 endfunction()
 
-file(GLOB SHADER_SOURCES bucket.slang)
+file(GLOB SHADER_SOURCES shaders/bucket.slang)
 set(SHADERS_DIR shaders)
 set(ENTRY_POINTS -entry fluid_bucket -entry wall_bucket -entry clear_bucket)
 
