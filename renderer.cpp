@@ -28,6 +28,8 @@ void render::Renderer::Init(Parameters parameters) {
   CreateLogicalDevice();
   CreateBucketDescriptorSetLayout();
   CreateFluidBucketPipeline();
+  CreateClearBucketPipeline();
+  CreateWallBucketPipeline();
   CreateCommandPools();
   CreateBucketUniformBuffer();
   CreateFluidParticlesStorageBuffers();
@@ -276,7 +278,10 @@ void render::Renderer::Simulate() {
   uint64_t fluid_bucket_wait_value = timeline_value_;
   uint64_t fluid_bucket_signal_value = ++timeline_value_;
 
+  RecordClearBucketCommandBuffer();
   RecordFluidBucketCommandBuffer();
+  RecordWallBucketCommandBuffer();
+  RecordBucketPrimaryCommandBuffer();
 
   vk::TimelineSemaphoreSubmitInfo fluid_bucket_timeline_info{
       .waitSemaphoreValueCount = 1,
@@ -293,7 +298,7 @@ void render::Renderer::Simulate() {
       .pWaitSemaphores = &*semaphore_,
       .pWaitDstStageMask = wait_stages.data(),
       .commandBufferCount = 1,
-      .pCommandBuffers = &*compute_command_buffers_[frame_index_],
+      .pCommandBuffers = &*bucket_primary_command_buffers_[frame_index_],
       .signalSemaphoreCount = 1,
       .pSignalSemaphores = &*semaphore_};
 
@@ -314,23 +319,67 @@ void render::Renderer::CreateFluidBucketPipeline() {
 
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
       .setLayoutCount = 1, .pSetLayouts = &*bucket_descriptor_set_layout_};
-  fluid_bucket_pipeline_layout_ =
+  bucket_pipeline_layout_ =
       vk::raii::PipelineLayout(device_, pipeline_layout_info);
 
   vk::ComputePipelineCreateInfo pipeline_info{
-      .stage = fluid_bucket_stage_info,
-      .layout = *fluid_bucket_pipeline_layout_};
+      .stage = fluid_bucket_stage_info, .layout = *bucket_pipeline_layout_};
   fluid_bucket_pipeline_ = vk::raii::Pipeline(device_, nullptr, pipeline_info);
 }
 
+void render::Renderer::CreateClearBucketPipeline() {
+  vk::raii::ShaderModule bucket_shader_module =
+      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+
+  vk::PipelineShaderStageCreateInfo clear_bucket_stage_info{
+      .stage = vk::ShaderStageFlagBits::eCompute,
+      .module = bucket_shader_module,
+      .pName = "clear_bucket"};
+
+  vk::ComputePipelineCreateInfo pipeline_info{
+      .stage = clear_bucket_stage_info, .layout = *bucket_pipeline_layout_};
+  clear_bucket_pipeline_ = vk::raii::Pipeline(device_, nullptr, pipeline_info);
+}
+
+void render::Renderer::CreateWallBucketPipeline() {
+  vk::raii::ShaderModule bucket_shader_module =
+      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+
+  vk::PipelineShaderStageCreateInfo wall_bucket_stage_info{
+      .stage = vk::ShaderStageFlagBits::eCompute,
+      .module = bucket_shader_module,
+      .pName = "wall_bucket"};
+
+  vk::ComputePipelineCreateInfo pipeline_info{
+      .stage = wall_bucket_stage_info, .layout = *bucket_pipeline_layout_};
+  wall_bucket_pipeline_ = vk::raii::Pipeline(device_, nullptr, pipeline_info);
+}
+
 void render::Renderer::CreateBucketCommandBuffers() {
-  compute_command_buffers_.clear();
-  vk::CommandBufferAllocateInfo alloc_info{
+  bucket_primary_command_buffers_.clear();
+  clear_bucket_secondary_command_buffers_.clear();
+  fluid_bucket_secondary_command_buffers_.clear();
+  wall_bucket_secondary_command_buffers_.clear();
+
+  vk::CommandBufferAllocateInfo primary_alloc_info{
       .commandPool = *compute_command_pool_,
       .level = vk::CommandBufferLevel::ePrimary,
       .commandBufferCount = kMaxFramesInFlight,
   };
-  compute_command_buffers_ = vk::raii::CommandBuffers(device_, alloc_info);
+  bucket_primary_command_buffers_ =
+      vk::raii::CommandBuffers(device_, primary_alloc_info);
+
+  vk::CommandBufferAllocateInfo secondary_alloc_info{
+      .commandPool = *compute_command_pool_,
+      .level = vk::CommandBufferLevel::eSecondary,
+      .commandBufferCount = kMaxFramesInFlight,
+  };
+  clear_bucket_secondary_command_buffers_ =
+      vk::raii::CommandBuffers(device_, secondary_alloc_info);
+  fluid_bucket_secondary_command_buffers_ =
+      vk::raii::CommandBuffers(device_, secondary_alloc_info);
+  wall_bucket_secondary_command_buffers_ =
+      vk::raii::CommandBuffers(device_, secondary_alloc_info);
 }
 
 void render::Renderer::CreateBucketDescriptorSetLayout() {
@@ -568,18 +617,92 @@ void render::Renderer::CreateFluidBucketDescriptorSets() {
 }
 
 void render::Renderer::RecordFluidBucketCommandBuffer() {
-  vk::CommandBufferBeginInfo begin_info{};
-  compute_command_buffers_[frame_index_].begin(begin_info);
+  fluid_bucket_secondary_command_buffers_[frame_index_].reset();
 
-  compute_command_buffers_[frame_index_].bindPipeline(
+  vk::CommandBufferInheritanceInfo inheritance_info{};
+  vk::CommandBufferBeginInfo begin_info{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+      .pInheritanceInfo = &inheritance_info};
+
+  fluid_bucket_secondary_command_buffers_[frame_index_].begin(begin_info);
+
+  fluid_bucket_secondary_command_buffers_[frame_index_].bindPipeline(
       vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
-  compute_command_buffers_[frame_index_].bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_layout_, 0,
+  fluid_bucket_secondary_command_buffers_[frame_index_].bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
       {fluid_bucket_descriptor_sets_[frame_index_]}, {});
-  compute_command_buffers_[frame_index_].dispatch(
-      parameters_.fluid_particle_count / kNumThreads, 1, 1);
+  fluid_bucket_secondary_command_buffers_[frame_index_].dispatch(
+      (parameters_.fluid_particle_count + kNumThreads - 1) / kNumThreads, 1, 1);
 
-  compute_command_buffers_[frame_index_].end();
+  fluid_bucket_secondary_command_buffers_[frame_index_].end();
+}
+
+void render::Renderer::RecordClearBucketCommandBuffer() {
+  clear_bucket_secondary_command_buffers_[frame_index_].reset();
+
+  vk::CommandBufferInheritanceInfo inheritance_info{};
+  vk::CommandBufferBeginInfo begin_info{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+      .pInheritanceInfo = &inheritance_info};
+
+  clear_bucket_secondary_command_buffers_[frame_index_].begin(begin_info);
+
+  clear_bucket_secondary_command_buffers_[frame_index_].bindPipeline(
+      vk::PipelineBindPoint::eCompute, clear_bucket_pipeline_);
+  clear_bucket_secondary_command_buffers_[frame_index_].bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
+      {fluid_bucket_descriptor_sets_[frame_index_]}, {});
+
+  const uint32_t bucket_dispatch_x =
+      (parameters_.bucket_size[0] + kClearBucketsNumThreads - 1) /
+      kClearBucketsNumThreads;
+  const uint32_t bucket_dispatch_y =
+      (parameters_.bucket_size[1] + kClearBucketsNumThreads - 1) /
+      kClearBucketsNumThreads;
+  const uint32_t bucket_dispatch_z =
+      (parameters_.bucket_size[2] + kClearBucketsNumThreads - 1) /
+      kClearBucketsNumThreads;
+  clear_bucket_secondary_command_buffers_[frame_index_].dispatch(
+      bucket_dispatch_x, bucket_dispatch_y, bucket_dispatch_z);
+
+  clear_bucket_secondary_command_buffers_[frame_index_].end();
+}
+
+void render::Renderer::RecordBucketPrimaryCommandBuffer() {
+  bucket_primary_command_buffers_[frame_index_].reset();
+
+  vk::CommandBufferBeginInfo begin_info{};
+  bucket_primary_command_buffers_[frame_index_].begin(begin_info);
+
+  std::array<vk::CommandBuffer, 3> secondary_command_buffers{
+      *clear_bucket_secondary_command_buffers_[frame_index_],
+      *fluid_bucket_secondary_command_buffers_[frame_index_],
+      *wall_bucket_secondary_command_buffers_[frame_index_]};
+  bucket_primary_command_buffers_[frame_index_].executeCommands(
+      secondary_command_buffers);
+
+  bucket_primary_command_buffers_[frame_index_].end();
+}
+
+void render::Renderer::RecordWallBucketCommandBuffer() {
+  wall_bucket_secondary_command_buffers_[frame_index_].reset();
+
+  vk::CommandBufferInheritanceInfo inheritance_info{};
+  vk::CommandBufferBeginInfo begin_info{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+      .pInheritanceInfo = &inheritance_info};
+
+  wall_bucket_secondary_command_buffers_[frame_index_].begin(begin_info);
+
+  wall_bucket_secondary_command_buffers_[frame_index_].bindPipeline(
+      vk::PipelineBindPoint::eCompute, wall_bucket_pipeline_);
+  wall_bucket_secondary_command_buffers_[frame_index_].bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
+      {fluid_bucket_descriptor_sets_[frame_index_]}, {});
+  wall_bucket_secondary_command_buffers_[frame_index_].dispatch(
+      (parameters_.wall_particle_count + kNumThreads - 1) / kNumThreads, 1, 1);
+
+  wall_bucket_secondary_command_buffers_[frame_index_].end();
 }
 
 uint32_t render::Renderer::FindQueue(

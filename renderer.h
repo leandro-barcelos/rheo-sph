@@ -14,6 +14,7 @@ namespace render {
 
 constexpr uint32_t kMaxFramesInFlight = 2;
 constexpr uint32_t kNumThreads = 256;
+constexpr uint32_t kClearBucketsNumThreads = 10;
 constexpr std::array kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 
 #ifdef NDEBUG
@@ -65,7 +66,10 @@ class Renderer {
   vk::raii::CommandPool graphics_command_pool_ = nullptr;
   vk::raii::CommandPool compute_command_pool_ = nullptr;
   vk::raii::CommandPool transfer_command_pool_ = nullptr;
-  std::vector<vk::raii::CommandBuffer> compute_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> bucket_primary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> clear_bucket_secondary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> fluid_bucket_secondary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> wall_bucket_secondary_command_buffers_;
 
   vk::raii::Semaphore semaphore_ = nullptr;
   std::vector<vk::raii::Fence> in_flight_fences_;
@@ -98,8 +102,10 @@ class Renderer {
   // cada shader e fazer vários submits.
 
   // Bucket Shader
-  vk::raii::PipelineLayout fluid_bucket_pipeline_layout_ = nullptr;
+  vk::raii::PipelineLayout bucket_pipeline_layout_ = nullptr;
+  vk::raii::Pipeline clear_bucket_pipeline_ = nullptr;
   vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
+  vk::raii::Pipeline wall_bucket_pipeline_ = nullptr;
   vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
   vk::raii::Buffer parameters_uniform_buffer_ = nullptr;
   vk::raii::DeviceMemory parameters_uniform_buffer_memory_ = nullptr;
@@ -111,7 +117,9 @@ class Renderer {
   std::vector<vk::raii::DeviceMemory> bucket_buffers_memory_;
   std::vector<vk::raii::DescriptorSet> fluid_bucket_descriptor_sets_;
 
+  void CreateClearBucketPipeline();
   void CreateFluidBucketPipeline();
+  void CreateWallBucketPipeline();
   void CreateBucketCommandBuffers();
   void CreateBucketDescriptorSetLayout();
   void CreateBucketUniformBuffer();
@@ -119,7 +127,10 @@ class Renderer {
   void CreateWallParticlesStorageBuffers();
   void CreateBucketParametersBuffers();
   void CreateFluidBucketDescriptorSets();
+  void RecordBucketPrimaryCommandBuffer();
+  void RecordClearBucketCommandBuffer();
   void RecordFluidBucketCommandBuffer();
+  void RecordWallBucketCommandBuffer();
 
   // Utils
   [[nodiscard]] uint32_t FindQueue(
