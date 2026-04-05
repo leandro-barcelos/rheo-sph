@@ -20,9 +20,6 @@
 #include "vulkan/vulkan.hpp"
 #include "window.h"
 
-#define MAX_FRAMES_IN_FLIGHT 2
-#define NUM_THREADS 256
-
 void render::Renderer::Init(Parameters parameters) {
   parameters_ = parameters;
 
@@ -221,12 +218,12 @@ void render::Renderer::CreateLogicalDevice() {
 void render::Renderer::CreateDescriptorPool() {
   std::array pool_size{
       vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
-                             MAX_FRAMES_IN_FLIGHT),
+                             kMaxFramesInFlight),
       vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer,
-                             MAX_FRAMES_IN_FLIGHT * 3)};
+                             kMaxFramesInFlight * 3)};
   vk::DescriptorPoolCreateInfo pool_info{
       .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-      .maxSets = MAX_FRAMES_IN_FLIGHT,
+      .maxSets = kMaxFramesInFlight,
       .poolSizeCount = pool_size.size(),
       .pPoolSizes = pool_size.data(),
   };
@@ -262,7 +259,7 @@ void render::Renderer::CreateSyncObjects() {
   semaphore_ = vk::raii::Semaphore(device_, semaphore_info);
   timeline_value_ = 0;
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (size_t i = 0; i < kMaxFramesInFlight; i++) {
     vk::FenceCreateInfo fence_info{.flags = vk::FenceCreateFlagBits::eSignaled};
     in_flight_fences_.emplace_back(device_, fence_info);
   }
@@ -303,7 +300,7 @@ void render::Renderer::Simulate() {
   compute_queue_.submit(fluid_bucket_submit_info,
                         in_flight_fences_[frame_index_]);
 
-  frame_index_ = (frame_index_ + 1) % MAX_FRAMES_IN_FLIGHT;
+  frame_index_ = (frame_index_ + 1) % kMaxFramesInFlight;
 }
 
 void render::Renderer::CreateFluidBucketPipeline() {
@@ -331,7 +328,7 @@ void render::Renderer::CreateBucketCommandBuffers() {
   vk::CommandBufferAllocateInfo alloc_info{
       .commandPool = *compute_command_pool_,
       .level = vk::CommandBufferLevel::ePrimary,
-      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+      .commandBufferCount = kMaxFramesInFlight,
   };
   compute_command_buffers_ = vk::raii::CommandBuffers(device_, alloc_info);
 }
@@ -407,7 +404,7 @@ void render::Renderer::CreateFluidParticlesStorageBuffers() {
   std::memcpy(data_staging, particles.data(), static_cast<size_t>(buffer_size));
   staging_buffer_memory.unmapMemory();
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+  for (size_t i = 0; i < kMaxFramesInFlight; ++i) {
     vk::raii::Buffer storage_buffer({});
     vk::raii::DeviceMemory storage_buffer_memory({});
     CreateBuffer(buffer_size,
@@ -445,7 +442,7 @@ void render::Renderer::CreateWallParticlesStorageBuffers() {
   std::memcpy(data_staging, particles.data(), static_cast<size_t>(buffer_size));
   staging_buffer_memory.unmapMemory();
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+  for (size_t i = 0; i < kMaxFramesInFlight; ++i) {
     vk::raii::Buffer storage_buffer({});
     vk::raii::DeviceMemory storage_buffer_memory({});
     CreateBuffer(buffer_size,
@@ -488,7 +485,7 @@ void render::Renderer::CreateBucketParametersBuffers() {
   std::memcpy(data_staging, buckets.data(), static_cast<size_t>(buffer_size));
   staging_buffer_memory.unmapMemory();
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+  for (size_t i = 0; i < kMaxFramesInFlight; ++i) {
     vk::raii::Buffer storage_buffer({});
     vk::raii::DeviceMemory storage_buffer_memory({});
     CreateBuffer(buffer_size,
@@ -503,7 +500,7 @@ void render::Renderer::CreateBucketParametersBuffers() {
 }
 
 void render::Renderer::CreateFluidBucketDescriptorSets() {
-  std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+  std::vector<vk::DescriptorSetLayout> layouts(kMaxFramesInFlight,
                                                bucket_descriptor_set_layout_);
   vk::DescriptorSetAllocateInfo alloc_info{
       .descriptorPool = *descriptor_pool_,
@@ -580,7 +577,7 @@ void render::Renderer::RecordFluidBucketCommandBuffer() {
       vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_layout_, 0,
       {fluid_bucket_descriptor_sets_[frame_index_]}, {});
   compute_command_buffers_[frame_index_].dispatch(
-      parameters_.fluid_particle_count / NUM_THREADS, 1, 1);
+      parameters_.fluid_particle_count / kNumThreads, 1, 1);
 
   compute_command_buffers_[frame_index_].end();
 }

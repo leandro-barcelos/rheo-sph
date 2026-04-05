@@ -12,6 +12,8 @@
 
 namespace render {
 
+constexpr uint32_t kMaxFramesInFlight = 2;
+constexpr uint32_t kNumThreads = 256;
 constexpr std::array kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 
 #ifdef NDEBUG
