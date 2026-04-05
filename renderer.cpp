@@ -69,39 +69,59 @@ void render::Renderer::CreateInstance() {
   instance_ = vk::raii::Instance(context_, create_info);
 }
 
+bool render::Renderer::IsDeviceSuitable(
+    vk::raii::PhysicalDevice const& physical_device) {
+  bool supports_vulkan_1_3 =
+      physical_device.getProperties().apiVersion >= VK_API_VERSION_1_3;
+
+  auto queue_families = physical_device.getQueueFamilyProperties();
+  bool supports_graphics =
+      std::ranges::any_of(queue_families, [](auto const& qfp) {
+        return !!(qfp.queueFlags & vk::QueueFlagBits::eGraphics);
+      });
+
+  auto available_device_extensions =
+      physical_device.enumerateDeviceExtensionProperties();
+  bool supports_all_required_extensions = std::ranges::all_of(
+      required_device_extensions_,
+      [&available_device_extensions](auto const& required_device_extension) {
+        return std::ranges::any_of(
+            available_device_extensions,
+            [required_device_extension](
+                auto const& available_device_extension) {
+              return strcmp(available_device_extension.extensionName,
+                            required_device_extension) == 0;
+            });
+      });
+
+  auto features = physical_device.template getFeatures2<
+      vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+      vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
+  bool supports_required_features =
+      (features.template get<vk::PhysicalDeviceFeatures2>()
+           .features.samplerAnisotropy != 0U) &&
+      (features.template get<vk::PhysicalDeviceVulkan13Features>()
+           .dynamicRendering != 0U) &&
+      (features
+           .template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>()
+           .extendedDynamicState != 0U) &&
+      (features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>()
+           .timelineSemaphore != 0U);
+
+  return supports_vulkan_1_3 && supports_graphics &&
+         supports_all_required_extensions && supports_required_features;
+}
+
 void render::Renderer::PickPhysicalDevice() {
   const auto physical_devices = instance_.enumeratePhysicalDevices();
-
-  if (physical_devices.empty()) {
-    throw std::runtime_error(
-        "[ERROR] Vulkan: failed to find GPUs with Vulkan support");
-  }
-
-  std::multimap<int, vk::raii::PhysicalDevice> candidates;
-
-  for (const auto& physical_device : physical_devices) {
-    const auto properties = physical_device.getProperties();
-    const auto features = physical_device.getFeatures();
-    uint32_t score = 0;
-
-    if (properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-      score += 1000;
-    }
-
-    score += properties.limits.maxImageDimension2D;
-
-    if (features.geometryShader == 0U) {
-      continue;
-    }
-
-    candidates.insert(std::make_pair(score, physical_device));
-  }
-
-  if (candidates.rbegin()->first > 0) {
-    physical_device_ = candidates.rbegin()->second;
-  } else {
+  auto const dev_iter =
+      std::ranges::find_if(physical_devices, [&](auto const& physical_device) {
+        return IsDeviceSuitable(physical_device);
+      });
+  if (dev_iter == physical_devices.end()) {
     throw std::runtime_error("[ERROR] Vulkan: failed to find a suitable GPU");
   }
+  physical_device_ = *dev_iter;
 }
 
 void render::Renderer::CreateLogicalDevice() {

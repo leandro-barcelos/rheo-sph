@@ -29,8 +29,11 @@ class Renderer {
   uint32_t compute_queue_index_ = ~0;
   vk::raii::Queue transfer_queue_ = nullptr;
   uint32_t transfer_queue_index_ = ~0;
+  std::vector<const char*> required_device_extensions_ = {
+      vk::KHRSwapchainExtensionName};
 
   void CreateInstance();
+  bool IsDeviceSuitable(vk::raii::PhysicalDevice const& physical_device);
   void PickPhysicalDevice();
   void CreateLogicalDevice();
 
