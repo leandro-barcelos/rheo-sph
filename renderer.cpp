@@ -1,9 +1,15 @@
 #include "renderer.h"
 
+#include <sys/types.h>
+#include <vulkan/vulkan_core.h>
+
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
-#include <iterator>
-#include <map>
+#include <fstream>
+#include <ios>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -14,11 +20,29 @@
 #include "vulkan/vulkan.hpp"
 #include "window.h"
 
-void render::Renderer::Init() {
+#define MAX_FRAMES_IN_FLIGHT 2
+#define NUM_THREADS 256
+
+void render::Renderer::Init(Parameters parameters) {
+  parameters_ = parameters;
+
   CreateInstance();
   PickPhysicalDevice();
   CreateLogicalDevice();
+  CreateBucketDescriptorSetLayout();
+  CreateFluidBucketPipeline();
+  CreateCommandPools();
+  CreateBucketUniformBuffer();
+  CreateFluidParticlesStorageBuffers();
+  CreateWallParticlesStorageBuffers();
+  CreateBucketParametersBuffers();
+  CreateDescriptorPool();
+  CreateFluidBucketDescriptorSets();
+  CreateBucketCommandBuffers();
+  CreateSyncObjects();
 }
+
+void render::Renderer::Update() { Simulate(); }
 
 void render::Renderer::CreateInstance() {
   constexpr vk::ApplicationInfo kAppInfo{
@@ -96,6 +120,7 @@ bool render::Renderer::IsDeviceSuitable(
 
   auto features = physical_device.template getFeatures2<
       vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
       vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
   bool supports_required_features =
       (features.template get<vk::PhysicalDeviceFeatures2>()
@@ -164,9 +189,12 @@ void render::Renderer::CreateLogicalDevice() {
 
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan13Features,
-                     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
-      feature_chain = {
-          {}, {.dynamicRendering = VK_TRUE}, {.extendedDynamicState = VK_TRUE}};
+                     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
+                     vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>
+      feature_chain = {{},
+                       {.dynamicRendering = vk::True},
+                       {.extendedDynamicState = vk::True},
+                       {.timelineSemaphore = vk::True}};
 
   std::vector required_device_extensions = {vk::KHRSwapchainExtensionName};
 
@@ -188,6 +216,373 @@ void render::Renderer::CreateLogicalDevice() {
   } else {
     transfer_queue_ = vk::raii::Queue(device_, transfer_queue_index_, 0);
   }
+}
+
+void render::Renderer::CreateDescriptorPool() {
+  std::array pool_size{
+      vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
+                             MAX_FRAMES_IN_FLIGHT),
+      vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer,
+                             MAX_FRAMES_IN_FLIGHT * 3)};
+  vk::DescriptorPoolCreateInfo pool_info{
+      .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+      .maxSets = MAX_FRAMES_IN_FLIGHT,
+      .poolSizeCount = pool_size.size(),
+      .pPoolSizes = pool_size.data(),
+  };
+  descriptor_pool_ = vk::raii::DescriptorPool(device_, pool_info);
+}
+
+void render::Renderer::CreateCommandPools() {
+  vk::CommandPoolCreateInfo graphics_pool_info{
+      .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+      .queueFamilyIndex = graphics_queue_index_,
+  };
+  graphics_command_pool_ = vk::raii::CommandPool(device_, graphics_pool_info);
+
+  vk::CommandPoolCreateInfo compute_pool_info{
+      .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+      .queueFamilyIndex = compute_queue_index_,
+  };
+  compute_command_pool_ = vk::raii::CommandPool(device_, compute_pool_info);
+
+  vk::CommandPoolCreateInfo transfer_pool_info{
+      .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+      .queueFamilyIndex = transfer_queue_index_,
+  };
+  transfer_command_pool_ = vk::raii::CommandPool(device_, transfer_pool_info);
+}
+
+void render::Renderer::CreateSyncObjects() {
+  in_flight_fences_.clear();
+
+  vk::SemaphoreTypeCreateInfo semaphore_type{
+      .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
+  vk::SemaphoreCreateInfo semaphore_info{.pNext = &semaphore_type};
+  semaphore_ = vk::raii::Semaphore(device_, semaphore_info);
+  timeline_value_ = 0;
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::FenceCreateInfo fence_info{.flags = vk::FenceCreateFlagBits::eSignaled};
+    in_flight_fences_.emplace_back(device_, fence_info);
+  }
+}
+
+void render::Renderer::Simulate() {
+  auto fence_result = device_.waitForFences(*in_flight_fences_[frame_index_],
+                                            vk::True, UINT64_MAX);
+  if (fence_result != vk::Result::eSuccess) {
+    throw std::runtime_error("[ERROR] Vulkan: failed to wait for fence!");
+  }
+  device_.resetFences(*in_flight_fences_[frame_index_]);
+
+  uint64_t fluid_bucket_wait_value = timeline_value_;
+  uint64_t fluid_bucket_signal_value = ++timeline_value_;
+
+  RecordFluidBucketCommandBuffer();
+
+  vk::TimelineSemaphoreSubmitInfo fluid_bucket_timeline_info{
+      .waitSemaphoreValueCount = 1,
+      .pWaitSemaphoreValues = &fluid_bucket_wait_value,
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = &fluid_bucket_signal_value};
+
+  std::array<vk::PipelineStageFlags, 1> wait_stages{
+      vk::PipelineStageFlagBits::eComputeShader};
+
+  vk::SubmitInfo fluid_bucket_submit_info{
+      .pNext = &fluid_bucket_timeline_info,
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &*semaphore_,
+      .pWaitDstStageMask = wait_stages.data(),
+      .commandBufferCount = 1,
+      .pCommandBuffers = &*compute_command_buffers_[frame_index_],
+      .signalSemaphoreCount = 1,
+      .pSignalSemaphores = &*semaphore_};
+
+  compute_queue_.submit(fluid_bucket_submit_info,
+                        in_flight_fences_[frame_index_]);
+
+  frame_index_ = (frame_index_ + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void render::Renderer::CreateFluidBucketPipeline() {
+  vk::raii::ShaderModule bucket_shader_module =
+      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+
+  vk::PipelineShaderStageCreateInfo fluid_bucket_stage_info{
+      .stage = vk::ShaderStageFlagBits::eCompute,
+      .module = bucket_shader_module,
+      .pName = "fluid_bucket"};
+
+  vk::PipelineLayoutCreateInfo pipeline_layout_info{
+      .setLayoutCount = 1, .pSetLayouts = &*bucket_descriptor_set_layout_};
+  fluid_bucket_pipeline_layout_ =
+      vk::raii::PipelineLayout(device_, pipeline_layout_info);
+
+  vk::ComputePipelineCreateInfo pipeline_info{
+      .stage = fluid_bucket_stage_info,
+      .layout = *fluid_bucket_pipeline_layout_};
+  fluid_bucket_pipeline_ = vk::raii::Pipeline(device_, nullptr, pipeline_info);
+}
+
+void render::Renderer::CreateBucketCommandBuffers() {
+  compute_command_buffers_.clear();
+  vk::CommandBufferAllocateInfo alloc_info{
+      .commandPool = *compute_command_pool_,
+      .level = vk::CommandBufferLevel::ePrimary,
+      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+  };
+  compute_command_buffers_ = vk::raii::CommandBuffers(device_, alloc_info);
+}
+
+void render::Renderer::CreateBucketDescriptorSetLayout() {
+  std::array layout_bindings{
+      vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr)};
+
+  vk::DescriptorSetLayoutCreateInfo layout_info{
+      .bindingCount = static_cast<uint32_t>(layout_bindings.size()),
+      .pBindings = layout_bindings.data()};
+  bucket_descriptor_set_layout_ =
+      vk::raii::DescriptorSetLayout(device_, layout_info);
+}
+
+void render::Renderer::CreateBucketUniformBuffer() {
+  vk::DeviceSize buffer_size = sizeof(Parameters);
+
+  vk::raii::Buffer staging_buffer({});
+  vk::raii::DeviceMemory staging_buffer_memory({});
+  CreateBuffer(buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+               vk::MemoryPropertyFlagBits::eHostVisible |
+                   vk::MemoryPropertyFlagBits::eHostCoherent,
+               staging_buffer, staging_buffer_memory);
+
+  void* data_staging = staging_buffer_memory.mapMemory(0, buffer_size);
+  memcpy(data_staging, &parameters_, (size_t)buffer_size);
+  staging_buffer_memory.unmapMemory();
+
+  vk::raii::Buffer shader_storage_buffer_temp({});
+  vk::raii::DeviceMemory shader_storage_buffer_temp_memory({});
+  CreateBuffer(buffer_size,
+               vk::BufferUsageFlagBits::eUniformBuffer |
+                   vk::BufferUsageFlagBits::eTransferDst,
+               vk::MemoryPropertyFlagBits::eDeviceLocal,
+               shader_storage_buffer_temp, shader_storage_buffer_temp_memory);
+  CopyBuffer(staging_buffer, shader_storage_buffer_temp, buffer_size);
+  parameters_uniform_buffer_ = std::move(shader_storage_buffer_temp);
+  parameters_uniform_buffer_memory_ =
+      std::move(shader_storage_buffer_temp_memory);
+}
+
+void render::Renderer::CreateFluidParticlesStorageBuffers() {
+  fluid_particles_buffers_.clear();
+  fluid_particles_buffers_memory_.clear();
+
+  if (parameters_.fluid_particle_count == 0) {
+    return;
+  }
+
+  std::vector<FluidParticle> particles(parameters_.fluid_particle_count);
+  vk::DeviceSize buffer_size = sizeof(FluidParticle) * particles.size();
+
+  vk::raii::Buffer staging_buffer({});
+  vk::raii::DeviceMemory staging_buffer_memory({});
+  CreateBuffer(buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+               vk::MemoryPropertyFlagBits::eHostVisible |
+                   vk::MemoryPropertyFlagBits::eHostCoherent,
+               staging_buffer, staging_buffer_memory);
+
+  void* data_staging = staging_buffer_memory.mapMemory(0, buffer_size);
+  std::memcpy(data_staging, particles.data(), static_cast<size_t>(buffer_size));
+  staging_buffer_memory.unmapMemory();
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vk::raii::Buffer storage_buffer({});
+    vk::raii::DeviceMemory storage_buffer_memory({});
+    CreateBuffer(buffer_size,
+                 vk::BufferUsageFlagBits::eStorageBuffer |
+                     vk::BufferUsageFlagBits::eVertexBuffer |
+                     vk::BufferUsageFlagBits::eTransferDst,
+                 vk::MemoryPropertyFlagBits::eDeviceLocal, storage_buffer,
+                 storage_buffer_memory);
+    CopyBuffer(staging_buffer, storage_buffer, buffer_size);
+    fluid_particles_buffers_.emplace_back(std::move(storage_buffer));
+    fluid_particles_buffers_memory_.emplace_back(
+        std::move(storage_buffer_memory));
+  }
+}
+
+void render::Renderer::CreateWallParticlesStorageBuffers() {
+  wall_particles_buffers_.clear();
+  wall_particles_buffers_memory_.clear();
+
+  if (parameters_.wall_particle_count == 0) {
+    return;
+  }
+
+  std::vector<WallParticle> particles(parameters_.wall_particle_count);
+  vk::DeviceSize buffer_size = sizeof(WallParticle) * particles.size();
+
+  vk::raii::Buffer staging_buffer({});
+  vk::raii::DeviceMemory staging_buffer_memory({});
+  CreateBuffer(buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+               vk::MemoryPropertyFlagBits::eHostVisible |
+                   vk::MemoryPropertyFlagBits::eHostCoherent,
+               staging_buffer, staging_buffer_memory);
+
+  void* data_staging = staging_buffer_memory.mapMemory(0, buffer_size);
+  std::memcpy(data_staging, particles.data(), static_cast<size_t>(buffer_size));
+  staging_buffer_memory.unmapMemory();
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vk::raii::Buffer storage_buffer({});
+    vk::raii::DeviceMemory storage_buffer_memory({});
+    CreateBuffer(buffer_size,
+                 vk::BufferUsageFlagBits::eStorageBuffer |
+                     vk::BufferUsageFlagBits::eVertexBuffer |
+                     vk::BufferUsageFlagBits::eTransferDst,
+                 vk::MemoryPropertyFlagBits::eDeviceLocal, storage_buffer,
+                 storage_buffer_memory);
+    CopyBuffer(staging_buffer, storage_buffer, buffer_size);
+    wall_particles_buffers_.emplace_back(std::move(storage_buffer));
+    wall_particles_buffers_memory_.emplace_back(
+        std::move(storage_buffer_memory));
+  }
+}
+
+void render::Renderer::CreateBucketParametersBuffers() {
+  bucket_buffers_.clear();
+  bucket_buffers_memory_.clear();
+
+  const size_t bucket_count =
+      static_cast<size_t>(parameters_.bucket_size[0]) *
+      static_cast<size_t>(parameters_.bucket_size[1]) *
+      static_cast<size_t>(parameters_.bucket_size[2]) *
+      static_cast<size_t>(parameters_.voxel_max_particles);
+  if (bucket_count == 0) {
+    return;
+  }
+
+  std::vector<uint32_t> buckets(bucket_count, parameters_.total_particle_count);
+  vk::DeviceSize buffer_size = sizeof(uint32_t) * buckets.size();
+
+  vk::raii::Buffer staging_buffer({});
+  vk::raii::DeviceMemory staging_buffer_memory({});
+  CreateBuffer(buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+               vk::MemoryPropertyFlagBits::eHostVisible |
+                   vk::MemoryPropertyFlagBits::eHostCoherent,
+               staging_buffer, staging_buffer_memory);
+
+  void* data_staging = staging_buffer_memory.mapMemory(0, buffer_size);
+  std::memcpy(data_staging, buckets.data(), static_cast<size_t>(buffer_size));
+  staging_buffer_memory.unmapMemory();
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vk::raii::Buffer storage_buffer({});
+    vk::raii::DeviceMemory storage_buffer_memory({});
+    CreateBuffer(buffer_size,
+                 vk::BufferUsageFlagBits::eStorageBuffer |
+                     vk::BufferUsageFlagBits::eTransferDst,
+                 vk::MemoryPropertyFlagBits::eDeviceLocal, storage_buffer,
+                 storage_buffer_memory);
+    CopyBuffer(staging_buffer, storage_buffer, buffer_size);
+    bucket_buffers_.emplace_back(std::move(storage_buffer));
+    bucket_buffers_memory_.emplace_back(std::move(storage_buffer_memory));
+  }
+}
+
+void render::Renderer::CreateFluidBucketDescriptorSets() {
+  std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                               bucket_descriptor_set_layout_);
+  vk::DescriptorSetAllocateInfo alloc_info{
+      .descriptorPool = *descriptor_pool_,
+      .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+      .pSetLayouts = layouts.data()};
+  fluid_bucket_descriptor_sets_.clear();
+  fluid_bucket_descriptor_sets_ = device_.allocateDescriptorSets(alloc_info);
+
+  for (size_t i = 0; i < fluid_bucket_descriptor_sets_.size(); ++i) {
+    vk::DescriptorBufferInfo parameters_buffer_info{
+        .buffer = parameters_uniform_buffer_,
+        .offset = 0,
+        .range = sizeof(Parameters)};
+    vk::DescriptorBufferInfo fluid_particles_buffer_info{
+        .buffer = fluid_particles_buffers_[i],
+        .offset = 0,
+        .range = VK_WHOLE_SIZE};
+    vk::DescriptorBufferInfo wall_particles_buffer_info{
+        .buffer = wall_particles_buffers_[i],
+        .offset = 0,
+        .range = VK_WHOLE_SIZE};
+    vk::DescriptorBufferInfo bucket_buffer_info{
+        .buffer = bucket_buffers_[i], .offset = 0, .range = VK_WHOLE_SIZE};
+
+    std::array descriptor_writes{
+        vk::WriteDescriptorSet{
+            .dstSet = *fluid_bucket_descriptor_sets_[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &parameters_buffer_info,
+            .pTexelBufferView = nullptr},
+        vk::WriteDescriptorSet{
+            .dstSet = *fluid_bucket_descriptor_sets_[i],
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eStorageBuffer,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &fluid_particles_buffer_info,
+            .pTexelBufferView = nullptr},
+        vk::WriteDescriptorSet{
+            .dstSet = *fluid_bucket_descriptor_sets_[i],
+            .dstBinding = 2,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eStorageBuffer,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &wall_particles_buffer_info,
+            .pTexelBufferView = nullptr},
+        vk::WriteDescriptorSet{
+            .dstSet = *fluid_bucket_descriptor_sets_[i],
+            .dstBinding = 3,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eStorageBuffer,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &bucket_buffer_info,
+            .pTexelBufferView = nullptr},
+    };
+    device_.updateDescriptorSets(descriptor_writes, {});
+  }
+}
+
+void render::Renderer::RecordFluidBucketCommandBuffer() {
+  vk::CommandBufferBeginInfo begin_info{};
+  compute_command_buffers_[frame_index_].begin(begin_info);
+
+  compute_command_buffers_[frame_index_].bindPipeline(
+      vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
+  compute_command_buffers_[frame_index_].bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_layout_, 0,
+      {fluid_bucket_descriptor_sets_[frame_index_]}, {});
+  compute_command_buffers_[frame_index_].dispatch(
+      parameters_.fluid_particle_count / NUM_THREADS, 1, 1);
+
+  compute_command_buffers_[frame_index_].end();
 }
 
 uint32_t render::Renderer::FindQueue(
@@ -216,4 +611,99 @@ uint32_t render::Renderer::FindQueue(
   }
 
   return shared_queue_index;
+}
+
+vk::raii::ShaderModule render::Renderer::CreateShaderModule(
+    const std::vector<char>& code) {
+  vk::ShaderModuleCreateInfo create_info{
+      .codeSize = code.size(),
+      .pCode = reinterpret_cast<const uint32_t*>(code.data())};
+  vk::raii::ShaderModule shader_module{device_, create_info};
+  return shader_module;
+}
+
+std::vector<char> render::Renderer::ReadFile(const std::string& filename) {
+  std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+  if (!file.is_open()) {
+    throw std::runtime_error("[ERROR] IO: failed to open file " + filename);
+  }
+
+  std::vector<char> buffer(file.tellg());
+  file.seekg(0, std::ios::beg);
+  file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+  file.close();
+
+  return buffer;
+}
+
+void render::Renderer::CreateBuffer(vk::DeviceSize size,
+                                    vk::BufferUsageFlags usage,
+                                    vk::MemoryPropertyFlags properties,
+                                    vk::raii::Buffer& buffer,
+                                    vk::raii::DeviceMemory& buffer_memory) {
+  vk::BufferCreateInfo buffer_info{
+      .size = size, .usage = usage, .sharingMode = vk::SharingMode::eExclusive};
+  buffer = vk::raii::Buffer(device_, buffer_info);
+  vk::MemoryRequirements mem_requirements = buffer.getMemoryRequirements();
+  vk::MemoryAllocateInfo alloc_info{
+      .allocationSize = mem_requirements.size,
+      .memoryTypeIndex =
+          FindMemoryType(mem_requirements.memoryTypeBits, properties)};
+  buffer_memory = vk::raii::DeviceMemory(device_, alloc_info);
+  buffer.bindMemory(buffer_memory, 0);
+}
+
+uint32_t render::Renderer::FindMemoryType(uint32_t type_filter,
+                                          vk::MemoryPropertyFlags properties) {
+  vk::PhysicalDeviceMemoryProperties mem_properties =
+      physical_device_.getMemoryProperties();
+
+  for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
+    if (((type_filter & (1 << i)) != 0U) &&
+        (mem_properties.memoryTypes.at(i).propertyFlags & properties) ==
+            properties) {
+      return i;
+    }
+  }
+
+  throw std::runtime_error(
+      "[ERROR] Vulkan: failed to find suitable memory type!");
+}
+
+vk::raii::CommandBuffer render::Renderer::BeginSingleTimeTransferCommands()
+    const {
+  vk::CommandBufferAllocateInfo alloc_info{};
+  alloc_info.commandPool = *transfer_command_pool_;
+  alloc_info.level = vk::CommandBufferLevel::ePrimary;
+  alloc_info.commandBufferCount = 1;
+  vk::raii::CommandBuffer command_buffer =
+      std::move(vk::raii::CommandBuffers(device_, alloc_info).front());
+
+  vk::CommandBufferBeginInfo begin_info{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
+  command_buffer.begin(begin_info);
+
+  return command_buffer;
+}
+
+void render::Renderer::EndSingleTimeTransferCommands(
+    const vk::raii::CommandBuffer& command_buffer) const {
+  command_buffer.end();
+
+  vk::SubmitInfo submit_info{};
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &*command_buffer;
+  transfer_queue_.submit(submit_info, nullptr);
+  transfer_queue_.waitIdle();
+}
+
+void render::Renderer::CopyBuffer(const vk::raii::Buffer& src_buffer,
+                                  const vk::raii::Buffer& dst_buffer,
+                                  vk::DeviceSize size) const {
+  vk::raii::CommandBuffer command_copy_buffer =
+      BeginSingleTimeTransferCommands();
+  command_copy_buffer.copyBuffer(src_buffer, dst_buffer,
+                                 vk::BufferCopy(0, 0, size));
+  EndSingleTimeTransferCommands(command_copy_buffer);
 }

@@ -1,8 +1,14 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <cstdint>
+#include <glm/glm.hpp>
 #include <unordered_set>
+#include <vector>
 #include <vulkan/vulkan_raii.hpp>
+
+#include "glm/fwd.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace render {
 
@@ -14,11 +20,35 @@ constexpr bool kEnableValidationLayers = false;
 constexpr bool kEnableValidationLayers = true;
 #endif
 
+struct FluidParticle {
+  glm::vec3 position;
+  glm::vec3 velocity;
+  glm::vec3 distance_traveled;
+  glm::vec4 color;
+  float density;
+} __attribute__((aligned(64)));
+
+struct WallParticle {
+  glm::vec3 position;
+} __attribute__((aligned(16)));
+
+struct Parameters {
+  uint32_t voxel_max_particles;
+  uint32_t fluid_particle_count;
+  uint32_t wall_particle_count;
+  uint32_t total_particle_count;
+  glm::uvec3 bucket_size;
+  glm::vec3 min_bound;
+  glm::vec3 max_bound;
+} __attribute__((aligned(64)));
+
 class Renderer {
  public:
-  void Init();
+  void Init(Parameters parameters);
+  void Update();
 
  private:
+  // General
   vk::raii::Context context_;
   vk::raii::Instance instance_ = nullptr;
   vk::raii::PhysicalDevice physical_device_ = nullptr;
@@ -29,6 +59,17 @@ class Renderer {
   uint32_t compute_queue_index_ = ~0;
   vk::raii::Queue transfer_queue_ = nullptr;
   uint32_t transfer_queue_index_ = ~0;
+  vk::raii::DescriptorPool descriptor_pool_ = nullptr;
+  vk::raii::CommandPool graphics_command_pool_ = nullptr;
+  vk::raii::CommandPool compute_command_pool_ = nullptr;
+  vk::raii::CommandPool transfer_command_pool_ = nullptr;
+  std::vector<vk::raii::CommandBuffer> compute_command_buffers_;
+
+  vk::raii::Semaphore semaphore_ = nullptr;
+  std::vector<vk::raii::Fence> in_flight_fences_;
+  uint32_t frame_index_ = 0;
+  uint64_t timeline_value_ = 0;
+
   std::vector<const char*> required_device_extensions_ = {
       vk::KHRSwapchainExtensionName};
 
@@ -36,10 +77,67 @@ class Renderer {
   bool IsDeviceSuitable(vk::raii::PhysicalDevice const& physical_device);
   void PickPhysicalDevice();
   void CreateLogicalDevice();
+  void CreateDescriptorPool();
+  void CreateCommandPools();
+  void CreateSyncObjects();
 
+  // Simulation
+  Parameters parameters_;
+
+  void Simulate();
+
+  // TODO: Posso criar um command buffer primario
+  // pra "pipeline" inteira (processo todo), ou
+  // um para cada estágio (por exemplo, para a
+  // geração do bucket, etc), e criar command buffers
+  // secundarios para cada shader específica. Assim,
+  // precisa apenas de um submit.
+  // Outra ideia é criar um command buffer para
+  // cada shader e fazer vários submits.
+
+  // Bucket Shader
+  vk::raii::PipelineLayout fluid_bucket_pipeline_layout_ = nullptr;
+  vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
+  vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
+  vk::raii::Buffer parameters_uniform_buffer_ = nullptr;
+  vk::raii::DeviceMemory parameters_uniform_buffer_memory_ = nullptr;
+  std::vector<vk::raii::Buffer> fluid_particles_buffers_;
+  std::vector<vk::raii::DeviceMemory> fluid_particles_buffers_memory_;
+  std::vector<vk::raii::Buffer> wall_particles_buffers_;
+  std::vector<vk::raii::DeviceMemory> wall_particles_buffers_memory_;
+  std::vector<vk::raii::Buffer> bucket_buffers_;
+  std::vector<vk::raii::DeviceMemory> bucket_buffers_memory_;
+  std::vector<vk::raii::DescriptorSet> fluid_bucket_descriptor_sets_;
+
+  void CreateFluidBucketPipeline();
+  void CreateBucketCommandBuffers();
+  void CreateBucketDescriptorSetLayout();
+  void CreateBucketUniformBuffer();
+  void CreateFluidParticlesStorageBuffers();
+  void CreateWallParticlesStorageBuffers();
+  void CreateBucketParametersBuffers();
+  void CreateFluidBucketDescriptorSets();
+  void RecordFluidBucketCommandBuffer();
+
+  // Utils
   [[nodiscard]] uint32_t FindQueue(
       vk::QueueFlags flags,
       const std::unordered_set<uint32_t>& exclude = {}) const;
+  [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(
+      const std::vector<char>& code);
+  static std::vector<char> ReadFile(const std::string& filename);
+  void CreateBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage,
+                    vk::MemoryPropertyFlags properties,
+                    vk::raii::Buffer& buffer,
+                    vk::raii::DeviceMemory& buffer_memory);
+  uint32_t FindMemoryType(uint32_t type_filter,
+                          vk::MemoryPropertyFlags properties);
+  [[nodiscard]] vk::raii::CommandBuffer BeginSingleTimeTransferCommands() const;
+  void EndSingleTimeTransferCommands(
+      const vk::raii::CommandBuffer& command_buffer) const;
+  void CopyBuffer(const vk::raii::Buffer& src_buffer,
+                  const vk::raii::Buffer& dst_buffer,
+                  vk::DeviceSize size) const;
 };
 }  // namespace render
 
