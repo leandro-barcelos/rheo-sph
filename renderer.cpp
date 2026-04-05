@@ -275,25 +275,25 @@ void render::Renderer::Simulate() {
   }
   device_.resetFences(*in_flight_fences_[frame_index_]);
 
-  uint64_t fluid_bucket_wait_value = timeline_value_;
-  uint64_t fluid_bucket_signal_value = ++timeline_value_;
+  uint64_t bucket_wait_value = timeline_value_;
+  uint64_t bucket_signal_value = ++timeline_value_;
 
   RecordClearBucketCommandBuffer();
   RecordFluidBucketCommandBuffer();
   RecordWallBucketCommandBuffer();
   RecordBucketPrimaryCommandBuffer();
 
-  vk::TimelineSemaphoreSubmitInfo fluid_bucket_timeline_info{
+  vk::TimelineSemaphoreSubmitInfo bucket_timeline_info{
       .waitSemaphoreValueCount = 1,
-      .pWaitSemaphoreValues = &fluid_bucket_wait_value,
+      .pWaitSemaphoreValues = &bucket_wait_value,
       .signalSemaphoreValueCount = 1,
-      .pSignalSemaphoreValues = &fluid_bucket_signal_value};
+      .pSignalSemaphoreValues = &bucket_signal_value};
 
   std::array<vk::PipelineStageFlags, 1> wait_stages{
       vk::PipelineStageFlagBits::eComputeShader};
 
-  vk::SubmitInfo fluid_bucket_submit_info{
-      .pNext = &fluid_bucket_timeline_info,
+  vk::SubmitInfo bucket_submit_info{
+      .pNext = &bucket_timeline_info,
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &*semaphore_,
       .pWaitDstStageMask = wait_stages.data(),
@@ -302,10 +302,7 @@ void render::Renderer::Simulate() {
       .signalSemaphoreCount = 1,
       .pSignalSemaphores = &*semaphore_};
 
-  compute_queue_.submit(fluid_bucket_submit_info,
-                        in_flight_fences_[frame_index_]);
-
-  frame_index_ = (frame_index_ + 1) % kMaxFramesInFlight;
+  compute_queue_.submit(bucket_submit_info, nullptr);
 }
 
 void render::Renderer::CreateFluidBucketPipeline() {
