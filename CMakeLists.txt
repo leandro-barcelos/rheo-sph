@@ -30,18 +30,18 @@ target_sources(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
 
 if(UNIX AND NOT APPLE)
-        target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+  target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 endif()
 
 find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 
 function(compile_slang_shaders TARGET_NAME SHADER_FILE OUTPUT_DIR OUTPUT_SPIRV)
-        # Remaining args are forwarded directly to slangc (e.g. -entry foo -entry bar)
-        set(ENTRY_ARGS ${ARGN})
+  # Remaining args are forwarded directly to slangc (e.g. -entry foo -entry bar)
+  set(ENTRY_ARGS ${ARGN})
 
-        get_filename_component(SHADER_FILE_ABS "${SHADER_FILE}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+  get_filename_component(SHADER_FILE_ABS "${SHADER_FILE}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
 
-        add_custom_command(
+  add_custom_command(
                 OUTPUT ${OUTPUT_SPIRV}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_DIR}
                 COMMAND ${SLANGC_EXECUTABLE} ${SHADER_FILE_ABS}
@@ -55,18 +55,18 @@ function(compile_slang_shaders TARGET_NAME SHADER_FILE OUTPUT_DIR OUTPUT_SPIRV)
                 COMMENT "Compiling Slang Shaders: ${SHADER_FILE}"
                 VERBATIM
         )
-        add_custom_target(${TARGET_NAME} DEPENDS ${OUTPUT_SPIRV})
+  add_custom_target(${TARGET_NAME} DEPENDS ${OUTPUT_SPIRV})
 endfunction()
 
 set(SHADERS_DIR shaders)
 
-compile_slang_shaders(bucket_slang_shader "shaders/bucket.slang" "${SHADERS_DIR}" "${SHADERS_DIR}/bucket.spv"
+compile_slang_shaders(bucket_compute_shader "shaders/compute/bucket.slang" "${SHADERS_DIR}" "${SHADERS_DIR}/compute/bucket.spv"
         -entry fluid_bucket
         -entry wall_bucket
         -entry clear_bucket
 )
-compile_slang_shaders(graphics_slang_shader "shaders/graphics.slang" "${SHADERS_DIR}" "${SHADERS_DIR}/graphics.spv"
+compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "${SHADERS_DIR}" "${SHADERS_DIR}/graphics/particle.spv"
         -entry vert_main
         -entry frag_main
 )
-add_dependencies(${PROJECT_NAME} bucket_slang_shader graphics_slang_shader)
+add_dependencies(${PROJECT_NAME} bucket_compute_shader particle_render_shader)

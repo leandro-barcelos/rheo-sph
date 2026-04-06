@@ -377,7 +377,7 @@ uint64_t render::Renderer::Simulate() {
 
 void render::Renderer::CreateFluidBucketPipeline() {
   vk::raii::ShaderModule bucket_shader_module =
-      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+      CreateShaderModule(ReadFile("shaders/compute/bucket.spv"));
 
   vk::PipelineShaderStageCreateInfo fluid_bucket_stage_info{
       .stage = vk::ShaderStageFlagBits::eCompute,
@@ -396,7 +396,7 @@ void render::Renderer::CreateFluidBucketPipeline() {
 
 void render::Renderer::CreateClearBucketPipeline() {
   vk::raii::ShaderModule bucket_shader_module =
-      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+      CreateShaderModule(ReadFile("shaders/compute/bucket.spv"));
 
   vk::PipelineShaderStageCreateInfo clear_bucket_stage_info{
       .stage = vk::ShaderStageFlagBits::eCompute,
@@ -410,7 +410,7 @@ void render::Renderer::CreateClearBucketPipeline() {
 
 void render::Renderer::CreateWallBucketPipeline() {
   vk::raii::ShaderModule bucket_shader_module =
-      CreateShaderModule(ReadFile("shaders/bucket.spv"));
+      CreateShaderModule(ReadFile("shaders/compute/bucket.spv"));
 
   vk::PipelineShaderStageCreateInfo wall_bucket_stage_info{
       .stage = vk::ShaderStageFlagBits::eCompute,
@@ -991,7 +991,7 @@ void render::Renderer::RecreateSwapChain(window::Window const& window) {
 
 void render::Renderer::CreateGraphicsPipeline() {
   vk::raii::ShaderModule shader_module =
-      CreateShaderModule(ReadFile("shaders/graphics.spv"));
+      CreateShaderModule(ReadFile("shaders/graphics/particle.spv"));
 
   vk::PipelineShaderStageCreateInfo vert_shader_stage_info{
       .stage = vk::ShaderStageFlagBits::eVertex,

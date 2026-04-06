@@ -1,4 +1,4 @@
-#include "defines.slang"
+#include "../defines.slang"
 
 struct FluidParticle {
   float3 position;
