@@ -29,11 +29,11 @@ add_executable(${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME}
         PRIVATE
-        main.cpp
-        window.h
-        window.cpp
-        renderer.h
-        renderer.cpp
+        src/main.cpp
+        src/window.h
+        src/window.cpp
+        src/renderer.h
+        src/renderer.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
