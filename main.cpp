@@ -13,18 +13,18 @@ int main() {
       .fluid_particle_count = 500,
       .wall_particle_count = 500,
       .total_particle_count = 1000,
-      .bucket_size = {50, 50, 50},
-      .min_bound = {-1, -1, -1},
-      .max_bound = {1, 1, 1},
+      .bucket_size = {50, 50, 50, 0},
+      .min_bound = {-1, -1, -1, 0},
+      .max_bound = {1, 1, 1, 0},
   };
 
   const window::Window window{kWindowProperties};
   try {
     render::Renderer vulkan;
-    vulkan.Init(kParameters);
+    vulkan.Init(window, kParameters);
 
     while (!window.ShouldClose()) {  // NOLINT(*-id-dependent-backward-branch)
-      vulkan.Update();
+      vulkan.Update(window);
       window::Window::PollEvents();
     }
   } catch (std::runtime_error& error) {

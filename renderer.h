@@ -1,6 +1,7 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <unordered_set>
@@ -9,6 +10,7 @@
 
 #include "glm/fwd.hpp"
 #include "vulkan/vulkan.hpp"
+#include "window.h"
 
 namespace render {
 
@@ -29,6 +31,10 @@ struct FluidParticle {
   glm::vec3 distance_traveled;
   glm::vec4 color;
   float density;
+
+  static vk::VertexInputBindingDescription GetBindingDescription();
+  static std::array<vk::VertexInputAttributeDescription, 3>
+  GetAttributeDescriptions();
 } __attribute__((aligned(64)));
 
 struct WallParticle {
@@ -40,15 +46,20 @@ struct Parameters {
   uint32_t fluid_particle_count;
   uint32_t wall_particle_count;
   uint32_t total_particle_count;
-  glm::uvec3 bucket_size;
-  glm::vec3 min_bound;
-  glm::vec3 max_bound;
+  glm::uvec4 bucket_size;
+  glm::vec4 min_bound;
+  glm::vec4 max_bound;
 } __attribute__((aligned(64)));
+
+struct RenderInfo {
+  uint32_t image_index;
+  uint64_t semaphore_wait_value;
+} __attribute__((aligned(16)));
 
 class Renderer {
  public:
-  void Init(Parameters parameters);
-  void Update();
+  void Init(window::Window const& window, Parameters parameters);
+  void Update(window::Window const& window);
 
  private:
   // General
@@ -66,10 +77,6 @@ class Renderer {
   vk::raii::CommandPool graphics_command_pool_ = nullptr;
   vk::raii::CommandPool compute_command_pool_ = nullptr;
   vk::raii::CommandPool transfer_command_pool_ = nullptr;
-  std::vector<vk::raii::CommandBuffer> bucket_primary_command_buffers_;
-  std::vector<vk::raii::CommandBuffer> clear_bucket_secondary_command_buffers_;
-  std::vector<vk::raii::CommandBuffer> fluid_bucket_secondary_command_buffers_;
-  std::vector<vk::raii::CommandBuffer> wall_bucket_secondary_command_buffers_;
 
   vk::raii::Semaphore semaphore_ = nullptr;
   std::vector<vk::raii::Fence> in_flight_fences_;
@@ -90,9 +97,9 @@ class Renderer {
   // Simulation
   Parameters parameters_;
 
-  void Simulate();
+  uint64_t Simulate();
 
-  // TODO: Posso criar um command buffer primario
+  // Posso criar um command buffer primario
   // pra "pipeline" inteira (processo todo), ou
   // um para cada estágio (por exemplo, para a
   // geração do bucket, etc), e criar command buffers
@@ -102,6 +109,10 @@ class Renderer {
   // cada shader e fazer vários submits.
 
   // Bucket Shader
+  std::vector<vk::raii::CommandBuffer> bucket_primary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> clear_bucket_secondary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> fluid_bucket_secondary_command_buffers_;
+  std::vector<vk::raii::CommandBuffer> wall_bucket_secondary_command_buffers_;
   vk::raii::PipelineLayout bucket_pipeline_layout_ = nullptr;
   vk::raii::Pipeline clear_bucket_pipeline_ = nullptr;
   vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
@@ -131,6 +142,45 @@ class Renderer {
   void RecordClearBucketCommandBuffer();
   void RecordFluidBucketCommandBuffer();
   void RecordWallBucketCommandBuffer();
+
+  // Graphics & Presentation
+  vk::raii::SurfaceKHR surface_ = nullptr;
+  std::vector<vk::raii::CommandBuffer> graphics_command_buffers_;
+  vk::raii::SwapchainKHR swap_chain_ = nullptr;
+  std::vector<vk::Image> swap_chain_images_;
+  std::vector<vk::ImageLayout> swap_chain_image_layouts_;
+  vk::SurfaceFormatKHR swap_chain_surface_format_;
+  vk::Extent2D swap_chain_extent_;
+  std::vector<vk::raii::ImageView> swap_chain_image_views_;
+  vk::raii::PipelineLayout graphics_pipeline_layout_ = nullptr;
+  vk::raii::Pipeline graphics_pipeline_ = nullptr;
+
+  bool framebuffer_resized_ = false;
+
+  void CreateSurface(window::Window const& window);
+  void CreateSwapChain(window::Window const& window);
+  void CreateImageViews();
+  static vk::Extent2D ChooseSwapExtent(
+      window::Window const& window,
+      vk::SurfaceCapabilitiesKHR const& surface_capabilities);
+  static uint32_t ChooseSwapMinImageCount(
+      vk::SurfaceCapabilitiesKHR const& surface_capabilities);
+  static vk::SurfaceFormatKHR ChooseSwapSurfaceFormat(
+      std::vector<vk::SurfaceFormatKHR> const& available_formats);
+  static vk::PresentModeKHR ChooseSwapPresentMode(
+      std::vector<vk::PresentModeKHR> const& available_present_modes);
+  void CreateGraphicsCommandBuffers();
+  void TransitionImageLayout(uint32_t image_index, vk::ImageLayout old_layout,
+                             vk::ImageLayout new_layout,
+                             vk::AccessFlags2 src_access_mask,
+                             vk::AccessFlags2 dst_access_mask,
+                             vk::PipelineStageFlags2 src_stage_mask,
+                             vk::PipelineStageFlags2 dst_stage_mask);
+  void RecordGraphicsCommandBuffer(uint32_t image_index);
+  void CleanupSwapChain();
+  void RecreateSwapChain(window::Window const& window);
+  void CreateGraphicsPipeline();
+  uint64_t Render(RenderInfo info);
 
   // Utils
   [[nodiscard]] uint32_t FindQueue(

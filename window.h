@@ -1,11 +1,17 @@
 #ifndef RHEOSPH_WINDOW_H
 #define RHEOSPH_WINDOW_H
 
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <vector>
 
 namespace window {
+
+struct Size {
+  int width;
+  int height;
+} __attribute__((aligned(8)));
 
 struct Properties {
   int width;
@@ -30,6 +36,9 @@ class Window {
   [[nodiscard]] bool ShouldClose() const;
   static void PollEvents();
   static std::vector<const char*> GetRequiredExtensions();
+  [[nodiscard]] Size GetSize() const;
+  static void WaitEvents();
+  void CreateSurface(VkInstance instance, VkSurfaceKHR& surface) const;
 };
 }  // namespace window
 
