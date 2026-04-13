@@ -14,12 +14,12 @@ class VulkanSwapChain {
   static constexpr uint32_t kInvalidImageIndex =
       std::numeric_limits<uint32_t>::max();
 
-  void Init(Window const& window, VulkanDevice const& vulkan_device);
+  void Init(VulkanDevice const& vulkan_device, Window const& window);
   [[nodiscard]] uint32_t AcquireNextImage(
       core::VulkanDevice const& vulkan_device,
       core::FrameSync const& frame_sync) const;
-  void RecreateSwapChain(Window const& window,
-                         VulkanDevice const& vulkan_device);
+  void RecreateSwapChain(VulkanDevice const& vulkan_device,
+                         Window const& window);
   [[nodiscard]] vk::raii::SwapchainKHR const& SwapChain() const {
     return swap_chain_;
   }
@@ -43,12 +43,13 @@ class VulkanSwapChain {
  private:
   vk::raii::SwapchainKHR swap_chain_ = nullptr;
   std::vector<vk::Image> images_;
+  std::vector<vk::raii::ImageView> image_views_;
   std::vector<vk::ImageLayout> image_layouts_;
   vk::Extent2D extent_;
   vk::SurfaceFormatKHR surface_format_;
-  std::vector<vk::raii::ImageView> image_views_;
 
-  void CreateSwapChain(Window const& window, VulkanDevice const& vulkan_device);
+  void CreateSwapChain(VulkanDevice const& vulkan_device,
+                       Window const& window);
   void CreateImageViews(VulkanDevice const& vulkan_device);
   static vk::SurfaceFormatKHR ChooseSurfaceFormat(
       std::vector<vk::SurfaceFormatKHR> const& available_formats);

@@ -307,27 +307,6 @@ void simulation::FluidSimulator::CreateBucketCommandBuffers(
       std::move(wall_command_buffers.front());
 }
 
-void simulation::FluidSimulator::RecordFluidBucketCommandBuffer() {
-  vk::CommandBufferInheritanceInfo inheritance_info{};
-  vk::CommandBufferBeginInfo begin_info{
-      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-      .pInheritanceInfo = &inheritance_info};
-
-  fluid_bucket_secondary_command_buffer_.begin(begin_info);
-
-  fluid_bucket_secondary_command_buffer_.bindPipeline(
-      vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
-  fluid_bucket_secondary_command_buffer_.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
-      {bucket_descriptor_set_}, {});
-  fluid_bucket_secondary_command_buffer_.dispatch(
-      (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
-          kNumThreads,
-      1, 1);
-
-  fluid_bucket_secondary_command_buffer_.end();
-}
-
 void simulation::FluidSimulator::RecordClearBucketCommandBuffer() {
   clear_bucket_secondary_command_buffer_.reset();
 
@@ -359,21 +338,6 @@ void simulation::FluidSimulator::RecordClearBucketCommandBuffer() {
   clear_bucket_secondary_command_buffer_.end();
 }
 
-void simulation::FluidSimulator::RecordBucketPrimaryCommandBuffer() {
-  bucket_primary_command_buffer_.reset();
-
-  vk::CommandBufferBeginInfo begin_info{};
-  bucket_primary_command_buffer_.begin(begin_info);
-
-  std::array<vk::CommandBuffer, 3> secondary_command_buffer{
-      *clear_bucket_secondary_command_buffer_,
-      *fluid_bucket_secondary_command_buffer_,
-      *wall_bucket_secondary_command_buffer_};
-  bucket_primary_command_buffer_.executeCommands(secondary_command_buffer);
-
-  bucket_primary_command_buffer_.end();
-}
-
 void simulation::FluidSimulator::RecordWallBucketCommandBuffer() {
   wall_bucket_secondary_command_buffer_.reset();
 
@@ -395,6 +359,42 @@ void simulation::FluidSimulator::RecordWallBucketCommandBuffer() {
       1, 1);
 
   wall_bucket_secondary_command_buffer_.end();
+}
+
+void simulation::FluidSimulator::RecordFluidBucketCommandBuffer() {
+    vk::CommandBufferInheritanceInfo inheritance_info{};
+    vk::CommandBufferBeginInfo begin_info{
+            .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+            .pInheritanceInfo = &inheritance_info};
+
+    fluid_bucket_secondary_command_buffer_.begin(begin_info);
+
+    fluid_bucket_secondary_command_buffer_.bindPipeline(
+            vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
+    fluid_bucket_secondary_command_buffer_.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
+            {bucket_descriptor_set_}, {});
+    fluid_bucket_secondary_command_buffer_.dispatch(
+            (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
+                    kNumThreads,
+            1, 1);
+
+    fluid_bucket_secondary_command_buffer_.end();
+}
+
+void simulation::FluidSimulator::RecordBucketPrimaryCommandBuffer() {
+    bucket_primary_command_buffer_.reset();
+
+    vk::CommandBufferBeginInfo begin_info{};
+    bucket_primary_command_buffer_.begin(begin_info);
+
+    std::array<vk::CommandBuffer, 3> secondary_command_buffer{
+            *clear_bucket_secondary_command_buffer_,
+            *fluid_bucket_secondary_command_buffer_,
+            *wall_bucket_secondary_command_buffer_};
+    bucket_primary_command_buffer_.executeCommands(secondary_command_buffer);
+
+    bucket_primary_command_buffer_.end();
 }
 
 uint64_t simulation::FluidSimulator::DispatchBucket(

@@ -16,7 +16,7 @@ void app::RheoSPHApp::Init() {
   // Physical and Logical device and queues
   vulkan_device_.Init(context_, *window_.Surface());
   // Swapchain and Image views
-  vulkan_swap_chain_.Init(window_, vulkan_device_);
+  vulkan_swap_chain_.Init(vulkan_device_, window_);
   // Command Pools
   command_pools_.Init(vulkan_device_);
   // Sync objects
@@ -33,7 +33,7 @@ void app::RheoSPHApp::MainLoop() {
         vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
 
     if (image_index == core::VulkanSwapChain::kInvalidImageIndex) {
-      vulkan_swap_chain_.RecreateSwapChain(window_, vulkan_device_);
+      vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
       continue;
     }
 
@@ -41,8 +41,8 @@ void app::RheoSPHApp::MainLoop() {
         fluid_simulator_.Run(vulkan_device_, frame_sync_);
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
-                           fluid_simulator_, simulation_signal_value, window_,
-                           image_index);
+                 fluid_simulator_, image_index, window_,
+                 simulation_signal_value);
 
     core::Window::PollEvents();
   }

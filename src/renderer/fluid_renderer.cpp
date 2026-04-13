@@ -17,9 +17,9 @@ void renderer::FluidRenderer::Render(
     core::VulkanDevice const& vulkan_device,
     core::VulkanSwapChain& vulkan_swap_chain, core::FrameSync& frame_sync,
     simulation::FluidSimulator const& fluid_simulator,
-  uint64_t simulation_signal_value, core::Window const& window,
-  uint32_t image_index) {
-    uint64_t graphics_wait_value = simulation_signal_value;
+    uint32_t image_index, core::Window const& window,
+    uint64_t simulation_signal_value) {
+  uint64_t graphics_wait_value = simulation_signal_value;
   uint64_t graphics_signal_value = frame_sync.GetNextTimelineValue();
 
   RecordGraphicsCommandBuffer(vulkan_swap_chain, image_index, fluid_simulator);
@@ -42,7 +42,7 @@ void renderer::FluidRenderer::Render(
       .pSignalSemaphores = &*frame_sync.Semaphore()};
   vulkan_device.GraphicsQueue().submit(graphics_submit_info, nullptr);
 
-    frame_sync.WaitSemaphore(vulkan_device, graphics_signal_value);
+  frame_sync.WaitSemaphore(vulkan_device, graphics_signal_value);
 
   vk::PresentInfoKHR present_info{
       .waitSemaphoreCount = 0,
@@ -51,11 +51,11 @@ void renderer::FluidRenderer::Render(
       .pSwapchains = &*vulkan_swap_chain.SwapChain(),
       .pImageIndices = &image_index};
 
-    auto result = vulkan_device.PresentQueue().presentKHR(present_info);
+  auto result = vulkan_device.PresentQueue().presentKHR(present_info);
   if ((result == vk::Result::eSuboptimalKHR) ||
       (result == vk::Result::eErrorOutOfDateKHR) || framebuffer_resized_) {
     framebuffer_resized_ = false;
-    vulkan_swap_chain.RecreateSwapChain(window, vulkan_device);
+    vulkan_swap_chain.RecreateSwapChain(vulkan_device, window);
   } else {
     assert(result == vk::Result::eSuccess);
   }

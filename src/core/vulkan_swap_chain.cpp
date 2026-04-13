@@ -8,9 +8,9 @@
 #include "vulkan_device.h"
 #include "window.h"
 
-void core::VulkanSwapChain::Init(Window const& window,
-                                 VulkanDevice const& vulkan_device) {
-  CreateSwapChain(window, vulkan_device);
+void core::VulkanSwapChain::Init(VulkanDevice const& vulkan_device,
+                                 Window const& window) {
+  CreateSwapChain(vulkan_device, window);
   CreateImageViews(vulkan_device);
 }
 
@@ -32,8 +32,8 @@ uint32_t core::VulkanSwapChain::AcquireNextImage(
   return image_index;
 }
 
-void core::VulkanSwapChain::CreateSwapChain(Window const& window,
-                                            VulkanDevice const& vulkan_device) {
+void core::VulkanSwapChain::CreateSwapChain(VulkanDevice const& vulkan_device,
+                                            Window const& window) {
   vk::SurfaceCapabilitiesKHR const surface_capabilities =
       window.Capabilities(vulkan_device);
   WindowSize const window_size = window.Size();
@@ -50,10 +50,10 @@ void core::VulkanSwapChain::CreateSwapChain(Window const& window,
   vk::PresentModeKHR const present_mode =
       ChoosePresentMode(available_present_modes);
 
-    std::array<uint32_t, 2> queue_family_indices = {
+  std::array<uint32_t, 2> queue_family_indices = {
       vulkan_device.GraphicsQueueFamilyIndex(),
       vulkan_device.PresentQueueFamilyIndex()};
-    const bool separate_present_queue =
+  const bool separate_present_queue =
       queue_family_indices[0] != queue_family_indices[1];
 
   vk::SwapchainCreateInfoKHR const swap_chain_create_info{
@@ -64,12 +64,11 @@ void core::VulkanSwapChain::CreateSwapChain(Window const& window,
       .imageExtent = extent_,
       .imageArrayLayers = 1,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-      .imageSharingMode =
-        separate_present_queue ? vk::SharingMode::eConcurrent
-                   : vk::SharingMode::eExclusive,
+      .imageSharingMode = separate_present_queue ? vk::SharingMode::eConcurrent
+                                                 : vk::SharingMode::eExclusive,
       .queueFamilyIndexCount = separate_present_queue ? 2U : 0U,
-      .pQueueFamilyIndices =
-        separate_present_queue ? queue_family_indices.data() : nullptr,
+      .pQueueFamilyIndices = separate_present_queue ? queue_family_indices.data()
+                                                    : nullptr,
       .preTransform = surface_capabilities.currentTransform,
       .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
       .presentMode = present_mode,
@@ -158,7 +157,7 @@ void core::VulkanSwapChain::CleanupSwapChain() {
 }
 
 void core::VulkanSwapChain::RecreateSwapChain(
-    Window const& window, VulkanDevice const& vulkan_device) {
+  VulkanDevice const& vulkan_device, Window const& window) {
   core::WindowSize window_size = window.Size();
   while (window_size.width == 0 || window_size.height == 0) {
     window_size = window.Size();
@@ -168,6 +167,6 @@ void core::VulkanSwapChain::RecreateSwapChain(
   vulkan_device.Device().waitIdle();
 
   CleanupSwapChain();
-  CreateSwapChain(window, vulkan_device);
+  CreateSwapChain(vulkan_device, window);
   CreateImageViews(vulkan_device);
 }

@@ -92,17 +92,17 @@ class FluidSimulator {
   void SwapParticleBufferIndices() { std::swap(read_index_, write_index_); }
 
   // Bucket Shader
-  vk::raii::CommandBuffer bucket_primary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer clear_bucket_secondary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer fluid_bucket_secondary_command_buffer_ = nullptr;
-  vk::raii::CommandBuffer wall_bucket_secondary_command_buffer_ = nullptr;
+  vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
   vk::raii::PipelineLayout bucket_pipeline_layout_ = nullptr;
   vk::raii::Pipeline clear_bucket_pipeline_ = nullptr;
   vk::raii::Pipeline fluid_bucket_pipeline_ = nullptr;
   vk::raii::Pipeline wall_bucket_pipeline_ = nullptr;
-  vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
   resources::DescriptorAllocator bucket_descriptor_allocator_;
   vk::raii::DescriptorSet bucket_descriptor_set_ = nullptr;
+  vk::raii::CommandBuffer clear_bucket_secondary_command_buffer_ = nullptr;
+  vk::raii::CommandBuffer fluid_bucket_secondary_command_buffer_ = nullptr;
+  vk::raii::CommandBuffer wall_bucket_secondary_command_buffer_ = nullptr;
+  vk::raii::CommandBuffer bucket_primary_command_buffer_ = nullptr;
 
   void CreateBucketDescriptorSetLayout(core::VulkanDevice const& vulkan_device);
   void CreateBucketPipelines(core::VulkanDevice const& vulkan_device);
@@ -114,10 +114,10 @@ class FluidSimulator {
   void CreateBucketCommandBuffers(core::VulkanDevice const& vulkan_device,
                                   core::CommandPools const& command_pools);
 
-  void RecordBucketPrimaryCommandBuffer();
   void RecordClearBucketCommandBuffer();
   void RecordFluidBucketCommandBuffer();
   void RecordWallBucketCommandBuffer();
+  void RecordBucketPrimaryCommandBuffer();
   [[nodiscard]] uint64_t DispatchBucket(
       core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync,
       uint64_t wait_value);
