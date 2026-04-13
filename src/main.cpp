@@ -1,36 +1,9 @@
 #include <cstdlib>
-#include <iostream>
 
-#include "renderer.h"
-#include "window.h"
+#include "app/rheo_sph_app.h"
 
 int main() {
-  constexpr window::Properties kWindowProperties{
-      .width = 800, .height = 600, .title = "Rheo SPH"};
-
-  constexpr render::Parameters kParameters{
-      .voxel_max_particles = 10,
-      .fluid_particle_count = 500,
-      .wall_particle_count = 500,
-      .total_particle_count = 1000,
-      .bucket_size = {50, 50, 50, 0},
-      .min_bound = {-1, -1, -1, 0},
-      .max_bound = {1, 1, 1, 0},
-  };
-
-  const window::Window window{kWindowProperties};
-  try {
-    render::Renderer vulkan;
-    vulkan.Init(window, kParameters);
-
-    while (!window.ShouldClose()) {  // NOLINT(*-id-dependent-backward-branch)
-      vulkan.Update(window);
-      window::Window::PollEvents();
-    }
-  } catch (std::runtime_error& error) {
-    std::cerr << error.what() << '\n';
-    return EXIT_FAILURE;
-  }
-
+  app::RheoSPHApp app;
+  app.Run();
   return EXIT_SUCCESS;
 }
