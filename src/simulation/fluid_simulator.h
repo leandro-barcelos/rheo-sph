@@ -22,30 +22,36 @@ class FluidSimulator {
   struct Parameters {
     uint32_t voxel_max_particles;
     uint32_t fluid_particle_count;
+    float rest_density;
+    float total_fluid_volume;
     glm::uvec4 bucket_size;
   } __attribute__((aligned(32)));
 
-  struct UniformBufferObject {
+  struct UniformBufferObject { // NOLINT(altera-struct-pack-align)
     uint32_t voxel_max_particles;
     uint32_t fluid_particle_count;
     uint32_t wall_particle_count;
     uint32_t total_particle_count;
+    float rest_density;
+    float particle_mass;
+    float effective_radius_2;
+    float effective_radius_9;
     glm::uvec4 bucket_size;
     glm::vec4 min_bound;
     glm::vec4 max_bound;
-  } __attribute__((aligned(64)));
+  } __attribute__((aligned(16)));
 
-  struct FluidParticle {
-    glm::vec3 position;
-    glm::vec3 velocity;
-    glm::vec3 distance_traveled;
+  struct FluidParticle { // NOLINT(altera-struct-pack-align)
+    glm::vec4 position;
+    glm::vec4 velocity;
+    glm::vec4 distance_traveled;
     glm::vec4 color;
     float density;
 
     static vk::VertexInputBindingDescription GetBindingDescription();
     static std::vector<vk::VertexInputAttributeDescription>
     GetAttributeDescriptions();
-  } __attribute__((aligned(64)));
+  } __attribute__((aligned(16)));
 
   struct WallParticle {
     glm::vec3 position;
@@ -95,9 +101,7 @@ class FluidSimulator {
   size_t read_index_ = 0;
   size_t write_index_ = 1;
 
-  void SwapParticleBufferIndices() {
-    std::swap(read_index_, write_index_);
-  }
+  void SwapParticleBufferIndices() { std::swap(read_index_, write_index_); }
 
   void CreateBucketDescriptorSetLayout(core::VulkanDevice const& vulkan_device);
   void CreateBucketPipelines(core::VulkanDevice const& vulkan_device);
@@ -116,5 +120,9 @@ class FluidSimulator {
 };
 
 }  // namespace simulation
+
+static_assert(sizeof(simulation::FluidSimulator::UniformBufferObject) == 80);
+static_assert(sizeof(simulation::FluidSimulator::FluidParticle) == 80);
+static_assert(sizeof(simulation::FluidSimulator::WallParticle) == 16);
 
 #endif  // !RHEOSPH_FLUID_SIMULATOR_H

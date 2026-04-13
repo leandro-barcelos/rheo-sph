@@ -5,6 +5,7 @@ struct FluidParticle {
   float3 velocity;
   float3 distance_traveled;
   float4 color;
+  float density;
 };
 
 struct WallParticle {
@@ -16,6 +17,10 @@ struct UniformBuffer {
   uint fluid_particle_count;
   uint wall_particle_count;
   uint total_particle_count;
+  float rest_density;
+  float particle_mass;
+  float effective_radius_2;
+  float effective_radius_9;
   uint3 bucket_size;
   float3 min_bound;
   float3 max_bound;

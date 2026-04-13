@@ -18,12 +18,14 @@ constexpr core::WindowProperties kWindowProperties{
 constexpr simulation::FluidSimulator::Parameters kParameters{
     .voxel_max_particles = 10,
     .fluid_particle_count = 500,
+    .rest_density = 1000,
+    .total_fluid_volume = 11700000,
     .bucket_size = {50, 50, 50, 0},
 };
 
 class RheoSPHApp {
  public:
-    RheoSPHApp() : window_(kWindowProperties), fluid_simulator_(kParameters) {}
+  RheoSPHApp() : window_(kWindowProperties), fluid_simulator_(kParameters) {}
   void Run();
 
  private:
@@ -31,7 +33,7 @@ class RheoSPHApp {
   void MainLoop();
 
   core::VulkanContext context_;
-    core::Window window_;
+  core::Window window_;
   core::VulkanDevice vulkan_device_;
   core::VulkanSwapChain vulkan_swap_chain_;
   core::CommandPools command_pools_;

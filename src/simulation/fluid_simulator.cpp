@@ -56,9 +56,9 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
   for (uint32_t z_index = 0; z_index < grid_resolution; ++z_index) {
     for (uint32_t y_index = 0; y_index < grid_resolution; ++y_index) {
       for (uint32_t x_index = 0; x_index < grid_resolution; ++x_index) {
-        const glm::vec3 position{static_cast<float>(x_index) * step,
+        const glm::vec4 position{static_cast<float>(x_index) * step,
                                  static_cast<float>(y_index) * step,
-                                 static_cast<float>(z_index) * step};
+                                 static_cast<float>(z_index) * step, 0.0F};
         const bool is_edge = x_index == 0 || x_index == (grid_resolution - 1) ||
                              y_index == 0 || y_index == (grid_resolution - 1) ||
                              z_index == 0 || z_index == (grid_resolution - 1);
@@ -70,8 +70,8 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
         if (fluid_particles_.size() < requested_fluid_particle_count) {
           fluid_particles_.emplace_back(
               FluidParticle{.position = position,
-                            .velocity = {0.0F, 0.0F, 0.0F},
-                            .distance_traveled = {0.0F, 0.0F, 0.0F},
+                            .velocity = {0.0F, 0.0F, 0.0F, 0.0F},
+                            .distance_traveled = {0.0F, 0.0F, 0.0F, 0.0F},
                             .color = {0.2F, 0.6F, 1.0F, 1.0F},
                             .density = 0.0F});
         }
@@ -79,12 +79,19 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
     }
   }
 
+  float total_mass = parameters.rest_density * parameters.total_fluid_volume;
+  float effective_radius = step * 1.2F;
+
   uniform_buffer_data_ = {
       .voxel_max_particles = parameters.voxel_max_particles,
       .fluid_particle_count = static_cast<uint32_t>(fluid_particles_.size()),
       .wall_particle_count = static_cast<uint32_t>(wall_particles_.size()),
       .total_particle_count = static_cast<uint32_t>(fluid_particles_.size() +
                                                     wall_particles_.size()),
+      .rest_density = parameters.rest_density,
+      .particle_mass = total_mass / static_cast<float>(fluid_particles_.size()),
+      .effective_radius_2 = std::pow(effective_radius, 2.F),
+      .effective_radius_9 = std::pow(effective_radius, 9.F),
       .bucket_size = parameters.bucket_size,
       .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
       .max_bound = {1.0F, 1.0F, 1.0F, 0.0F}};
@@ -104,17 +111,16 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
           .type = vk::DescriptorType::eUniformBuffer, .count = 1},
       resources::DescriptorAllocator::PoolSize{
           .type = vk::DescriptorType::eStorageBuffer, .count = 3}};
-    bucket_descriptor_allocator_.Init(
-      vulkan_device, 1, descriptor_pool_sizes);
+  bucket_descriptor_allocator_.Init(vulkan_device, 1, descriptor_pool_sizes);
   CreateBucketPipelines(vulkan_device);
   CreateBuffers(vulkan_device, command_pools);
-    CreateFluidBucketDescriptorSets(vulkan_device, bucket_descriptor_allocator_);
+  CreateFluidBucketDescriptorSets(vulkan_device, bucket_descriptor_allocator_);
   CreateBucketCommandBuffers(vulkan_device, command_pools);
 }
 
 uint64_t simulation::FluidSimulator::Run(
-        core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync) {
-    uint64_t bucket_wait_value = frame_sync.CurrentTimelineValue();
+    core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync) {
+  uint64_t bucket_wait_value = frame_sync.CurrentTimelineValue();
   uint64_t bucket_signal_value = frame_sync.GetNextTimelineValue();
 
   RecordClearBucketCommandBuffer();
@@ -143,8 +149,8 @@ uint64_t simulation::FluidSimulator::Run(
 
   vulkan_device.ComputeQueue().submit(bucket_submit_info, nullptr);
 
-    SwapParticleBufferIndices();
-    return bucket_signal_value;
+  SwapParticleBufferIndices();
+  return bucket_signal_value;
 }
 
 void simulation::FluidSimulator::CreateBucketDescriptorSetLayout(
@@ -198,10 +204,10 @@ void simulation::FluidSimulator::CreateBuffers(
   fluid_particles_buffers_ = resources::BufferAllocator::CreateSSBO(
       vulkan_device, command_pools, fluid_particles_, true,
       vk::BufferUsageFlagBits::eVertexBuffer);
-  wall_particles_buffer_ = std::move(resources::BufferAllocator::CreateSSBO(
-                                 vulkan_device, command_pools, wall_particles_,
-                                 false)
-                                 .front());
+  wall_particles_buffer_ =
+      std::move(resources::BufferAllocator::CreateSSBO(
+                    vulkan_device, command_pools, wall_particles_, false)
+                    .front());
   bucket_buffer_ = std::move(resources::BufferAllocator::CreateSSBO(
                                  vulkan_device, command_pools, bucket_, false)
                                  .front());
