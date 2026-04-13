@@ -92,8 +92,16 @@ compile_slang_shaders(bucket_compute_shader "shaders/compute/bucket.slang" "${SH
         -entry wall_bucket
         -entry clear_bucket
 )
+compile_slang_shaders(density_compute_shader "shaders/compute/density.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/density.spv"
+        -entry comp_main
+)
 compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/particle.spv"
         -entry vert_main
         -entry frag_main
 )
-add_dependencies(${PROJECT_NAME} bucket_compute_shader particle_render_shader)
+add_dependencies(
+    ${PROJECT_NAME}
+    bucket_compute_shader
+    density_compute_shader
+    particle_render_shader
+)
