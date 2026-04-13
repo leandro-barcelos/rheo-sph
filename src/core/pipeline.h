@@ -13,7 +13,8 @@ class PipelineBuilder {
   [[nodiscard]] static vk::raii::Pipeline Compute(
       core::VulkanDevice const& vulkan_device,
       vk::raii::PipelineLayout const& pipeline_layout,
-      std::string const& shader_filename, const char* name);
+      std::string const& shader_filename,
+      const char* name = "comp_main");
   [[nodiscard]] static vk::raii::Pipeline Graphics(
       core::VulkanDevice const& vulkan_device,
       vk::VertexInputBindingDescription binding_description,

@@ -38,7 +38,7 @@ std::vector<char> ReadFile(const std::string& filename) {
 vk::raii::Pipeline core::PipelineBuilder::Compute(
     core::VulkanDevice const& vulkan_device,
     vk::raii::PipelineLayout const& pipeline_layout,
-    std::string const& shader_filename, const char* name = "comp_main") {
+    std::string const& shader_filename, const char* name) {
   vk::raii::ShaderModule shader_module =
       CreateShaderModule(vulkan_device, ReadFile(shader_filename));
 
