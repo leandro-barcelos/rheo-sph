@@ -90,7 +90,7 @@ void wall_bucket(uint3 thread_id: SV_DispatchThreadID) {
 [shader("compute")]
 [numthreads(CLEAR_BUCKETS_NUM_THREADS, CLEAR_BUCKETS_NUM_THREADS, CLEAR_BUCKETS_NUM_THREADS)]
 void clear_bucket(uint3 thread_id: SV_DispatchThreadID) {
-  if (all(thread_id >= ubo.bucket_size)) {
+  if (any(thread_id >= ubo.bucket_size)) {
     return;
   }
 
