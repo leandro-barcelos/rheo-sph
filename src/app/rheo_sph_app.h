@@ -15,17 +15,25 @@ namespace app {
 constexpr core::WindowProperties kWindowProperties{
     .width = 800, .height = 600, .title = "Rheo SPH"};
 
-constexpr simulation::FluidSimulator::Parameters kParameters{
-    .voxel_max_particles = 10,
-    .fluid_particle_count = 500,
-    .rest_density = 1000,
-    .total_fluid_volume = 11700000,
-    .bucket_size = {50, 50, 50, 0},
-};
-
 class RheoSPHApp {
  public:
-  RheoSPHApp() : window_(kWindowProperties), fluid_simulator_(kParameters) {}
+  RheoSPHApp()
+      : window_(kWindowProperties),
+        fluid_simulator_(simulation::FluidSimulator::Parameters{
+            .voxel_max_particles = 10,
+            .fluid_particle_count = 500,
+            .rest_density = 1000,
+            .total_fluid_volume = 11700000,
+            .viscosity = 741,
+            .gas_constant = 230,
+            .coefficient_of_restitution = 0.067,
+            .elevation_texture_filename = "textures/normalized_brumadinho.png",
+            .min_elevation = 729,
+            .max_elevation = 1120,
+            .friction = 0,
+            .yield_stress = 59.82,
+            .bucket_size = {50, 50, 50, 0},
+        }) {}
   void Run();
 
  private:

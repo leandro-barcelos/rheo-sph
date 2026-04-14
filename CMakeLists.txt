@@ -48,6 +48,10 @@ target_sources(
         src/resources/descriptor.h
         src/resources/immediate_submit.cpp
         src/resources/immediate_submit.h
+        src/resources/images.cpp
+        src/resources/images.h
+        src/resources/memory.cpp
+        src/resources/memory.h
         src/simulation/fluid_simulator.cpp
         src/simulation/fluid_simulator.h
 )
@@ -96,6 +100,9 @@ compile_slang_shaders(bucket_compute_shader "shaders/compute/bucket.slang" "${SH
 compile_slang_shaders(density_compute_shader "shaders/compute/density.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/density.spv"
         -entry comp_main
 )
+compile_slang_shaders(vel_pos_compute_shader "shaders/compute/vel_pos.slang" "${SHADERS_DIR}/compute" "${SHADERS_DIR}/compute/vel_pos.spv"
+        -entry comp_main
+)
 compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/particle.spv"
         -entry vert_main
         -entry frag_main
@@ -104,5 +111,6 @@ add_dependencies(
     ${PROJECT_NAME}
     bucket_compute_shader
     density_compute_shader
+    vel_pos_compute_shader
     particle_render_shader
 )

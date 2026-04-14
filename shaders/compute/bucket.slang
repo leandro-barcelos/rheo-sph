@@ -19,8 +19,18 @@ struct UniformBuffer {
   uint total_particle_count;
   float rest_density;
   float particle_mass;
+  float effective_radius;
   float effective_radius_2;
+  float effective_radius_6;
   float effective_radius_9;
+  float time_step;
+  float viscosity;
+  float gas_constant;
+  float damping_coefficient;
+  float min_elevation;
+  float max_elevation;
+  float mu;
+  float yield_stress;
   uint3 bucket_size;
   float3 min_bound;
   float3 max_bound;

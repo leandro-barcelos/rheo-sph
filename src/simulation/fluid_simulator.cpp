@@ -1,8 +1,10 @@
+#define _USE_MATH_DEFINES
 #include "fluid_simulator.h"
 
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 
 #include "../core/pipeline.h"
 #include "vulkan/vulkan.hpp"
@@ -27,7 +29,8 @@ simulation::FluidSimulator::FluidParticle::GetAttributeDescriptions() {
 }
 
 simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
-    : uniform_buffer_data_{} {
+    : uniform_buffer_data_{},
+      elevation_texture_filename_(parameters.elevation_texture_filename) {
   const uint32_t requested_fluid_particle_count =
       parameters.fluid_particle_count;
 
@@ -90,8 +93,18 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
                                                     wall_particles_.size()),
       .rest_density = parameters.rest_density,
       .particle_mass = total_mass / static_cast<float>(fluid_particles_.size()),
+      .effective_radius = effective_radius,
       .effective_radius_2 = std::pow(effective_radius, 2.F),
+      .effective_radius_6 = std::pow(effective_radius, 6.F),
       .effective_radius_9 = std::pow(effective_radius, 9.F),
+      .viscosity = parameters.viscosity,
+      .gas_constant = parameters.gas_constant,
+      .damping_coefficient =
+          DampingCoefficient(parameters.coefficient_of_restitution),
+      .min_elevation = parameters.min_elevation,
+      .max_elevation = parameters.max_elevation,
+      .mu = parameters.friction,
+      .yield_stress = parameters.yield_stress,
       .bucket_size = parameters.bucket_size,
       .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
       .max_bound = {1.0F, 1.0F, 1.0F, 0.0F}};
@@ -129,6 +142,22 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
   CreateDensityPipeline(vulkan_device);
   CreateDensityDescriptorSets(vulkan_device, density_descriptor_allocator_);
   CreateDensityCommandBuffers(vulkan_device, command_pools);
+
+  elevation_texture_ = resources::ImageAllocator::CreateImage(
+      vulkan_device, command_pools, elevation_texture_filename_);
+  CreateVelPosDescriptorSetLayout(vulkan_device);
+  const std::array vel_pos_descriptor_pool_sizes = {
+      resources::DescriptorAllocator::PoolSize{
+          .type = vk::DescriptorType::eUniformBuffer, .count = 1},
+      resources::DescriptorAllocator::PoolSize{
+          .type = vk::DescriptorType::eStorageBuffer, .count = 4},
+      resources::DescriptorAllocator::PoolSize{
+          .type = vk::DescriptorType::eCombinedImageSampler, .count = 1}};
+  vel_pos_descriptor_allocator_.Init(vulkan_device, 1,
+                                     vel_pos_descriptor_pool_sizes);
+  CreateVelPosPipeline(vulkan_device);
+  CreateVelPosDescriptorSets(vulkan_device, vel_pos_descriptor_allocator_);
+  CreateVelPosCommandBuffers(vulkan_device, command_pools);
 }
 
 uint64_t simulation::FluidSimulator::Run(
@@ -140,6 +169,7 @@ uint64_t simulation::FluidSimulator::Run(
   RecordWallBucketCommandBuffer();
   RecordBucketPrimaryCommandBuffer();
   RecordDensityCommandBuffer();
+  RecordVelPosCommandBuffer();
 
   uint64_t bucket_signal_value =
       DispatchBucket(vulkan_device, frame_sync, simulation_wait_value);
@@ -151,7 +181,20 @@ uint64_t simulation::FluidSimulator::Run(
 
   SwapParticleBufferIndices();
 
-  return density_signal_value;
+  uint64_t vel_pos_signal_value =
+      DispatchVelPos(vulkan_device, frame_sync, density_signal_value);
+
+  return vel_pos_signal_value;
+}
+
+float simulation::FluidSimulator::DampingCoefficient(
+    float coefficient_of_restitution) {
+  float alpha_d = 0.7F;
+
+  return static_cast<float>(
+      -std::log(coefficient_of_restitution) /
+      (alpha_d * std::sqrt(std::pow(std::log(coefficient_of_restitution), 2.F) +
+                           std::pow(M_PI, 2.F))));
 }
 
 void simulation::FluidSimulator::CreateBucketDescriptorSetLayout(
@@ -362,39 +405,39 @@ void simulation::FluidSimulator::RecordWallBucketCommandBuffer() {
 }
 
 void simulation::FluidSimulator::RecordFluidBucketCommandBuffer() {
-    vk::CommandBufferInheritanceInfo inheritance_info{};
-    vk::CommandBufferBeginInfo begin_info{
-            .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-            .pInheritanceInfo = &inheritance_info};
+  vk::CommandBufferInheritanceInfo inheritance_info{};
+  vk::CommandBufferBeginInfo begin_info{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+      .pInheritanceInfo = &inheritance_info};
 
-    fluid_bucket_secondary_command_buffer_.begin(begin_info);
+  fluid_bucket_secondary_command_buffer_.begin(begin_info);
 
-    fluid_bucket_secondary_command_buffer_.bindPipeline(
-            vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
-    fluid_bucket_secondary_command_buffer_.bindDescriptorSets(
-            vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
-            {bucket_descriptor_set_}, {});
-    fluid_bucket_secondary_command_buffer_.dispatch(
-            (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
-                    kNumThreads,
-            1, 1);
+  fluid_bucket_secondary_command_buffer_.bindPipeline(
+      vk::PipelineBindPoint::eCompute, fluid_bucket_pipeline_);
+  fluid_bucket_secondary_command_buffer_.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, bucket_pipeline_layout_, 0,
+      {bucket_descriptor_set_}, {});
+  fluid_bucket_secondary_command_buffer_.dispatch(
+      (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
+          kNumThreads,
+      1, 1);
 
-    fluid_bucket_secondary_command_buffer_.end();
+  fluid_bucket_secondary_command_buffer_.end();
 }
 
 void simulation::FluidSimulator::RecordBucketPrimaryCommandBuffer() {
-    bucket_primary_command_buffer_.reset();
+  bucket_primary_command_buffer_.reset();
 
-    vk::CommandBufferBeginInfo begin_info{};
-    bucket_primary_command_buffer_.begin(begin_info);
+  vk::CommandBufferBeginInfo begin_info{};
+  bucket_primary_command_buffer_.begin(begin_info);
 
-    std::array<vk::CommandBuffer, 3> secondary_command_buffer{
-            *clear_bucket_secondary_command_buffer_,
-            *fluid_bucket_secondary_command_buffer_,
-            *wall_bucket_secondary_command_buffer_};
-    bucket_primary_command_buffer_.executeCommands(secondary_command_buffer);
+  std::array<vk::CommandBuffer, 3> secondary_command_buffer{
+      *clear_bucket_secondary_command_buffer_,
+      *fluid_bucket_secondary_command_buffer_,
+      *wall_bucket_secondary_command_buffer_};
+  bucket_primary_command_buffer_.executeCommands(secondary_command_buffer);
 
-    bucket_primary_command_buffer_.end();
+  bucket_primary_command_buffer_.end();
 }
 
 uint64_t simulation::FluidSimulator::DispatchBucket(
@@ -534,7 +577,7 @@ void simulation::FluidSimulator::CreateDensityCommandBuffers(
 }
 
 void simulation::FluidSimulator::RecordDensityCommandBuffer() {
-    density_command_buffer_.reset();
+  density_command_buffer_.reset();
 
   vk::CommandBufferBeginInfo begin_info{};
 
@@ -573,6 +616,192 @@ uint64_t simulation::FluidSimulator::DispatchDensity(
                              .pWaitDstStageMask = wait_stages.data(),
                              .commandBufferCount = 1,
                              .pCommandBuffers = &*density_command_buffer_,
+                             .signalSemaphoreCount = 1,
+                             .pSignalSemaphores = &*frame_sync.Semaphore()};
+
+  vulkan_device.ComputeQueue().submit(submit_info, nullptr);
+  return signal_value;
+}
+
+void simulation::FluidSimulator::CreateVelPosDescriptorSetLayout(
+    core::VulkanDevice const& vulkan_device) {
+  std::array layout_bindings{
+      vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr),
+      vk::DescriptorSetLayoutBinding(
+          5, vk::DescriptorType::eCombinedImageSampler, 1,
+          vk::ShaderStageFlagBits::eCompute, nullptr)};
+
+  vk::DescriptorSetLayoutCreateInfo layout_info{
+      .bindingCount = static_cast<uint32_t>(layout_bindings.size()),
+      .pBindings = layout_bindings.data()};
+  vel_pos_descriptor_set_layout_ =
+      vk::raii::DescriptorSetLayout(vulkan_device.Device(), layout_info);
+}
+
+void simulation::FluidSimulator::CreateVelPosPipeline(
+    core::VulkanDevice const& vulkan_device) {
+  vk::PipelineLayoutCreateInfo pipeline_layout_info{
+      .setLayoutCount = 1, .pSetLayouts = &*vel_pos_descriptor_set_layout_};
+  vel_pos_pipeline_layout_ =
+      vk::raii::PipelineLayout(vulkan_device.Device(), pipeline_layout_info);
+
+  vel_pos_pipeline_ = core::PipelineBuilder::Compute(
+      vulkan_device, vel_pos_pipeline_layout_, "shaders/compute/vel_pos.spv");
+}
+
+void simulation::FluidSimulator::CreateVelPosDescriptorSets(
+    core::VulkanDevice const& vulkan_device,
+    resources::DescriptorAllocator const& descriptor_allocator) {
+  vel_pos_descriptor_set_ = descriptor_allocator.Allocate(
+      vulkan_device, vel_pos_descriptor_set_layout_);
+
+  vk::DescriptorBufferInfo uniform_buffer_info(uniform_buffer_.buffer, 0,
+                                               sizeof(UniformBufferObject));
+
+  vk::DescriptorBufferInfo wall_particles_in_buffer_info(
+      wall_particles_buffer_.buffer, 0,
+      sizeof(WallParticle) * uniform_buffer_data_.wall_particle_count);
+
+  vk::DescriptorBufferInfo fluid_particles_in_buffer_info(
+      FluidParticlesReadBuffer().buffer, 0,
+      sizeof(FluidParticle) * uniform_buffer_data_.fluid_particle_count);
+
+  vk::DescriptorBufferInfo fluid_particles_out_buffer_info(
+      FluidParticlesWriteBuffer().buffer, 0,
+      sizeof(FluidParticle) * uniform_buffer_data_.fluid_particle_count);
+
+  vk::DescriptorBufferInfo bucket_buffer_info(
+      bucket_buffer_.buffer, 0, sizeof(uint32_t) * bucket_.size());
+
+  vk::DescriptorImageInfo elevation_texture_info{
+      .sampler = elevation_texture_.sampler,
+      .imageView = elevation_texture_.image_view,
+      .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal};
+
+  std::array descriptor_writes{
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eUniformBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &uniform_buffer_info,
+          .pTexelBufferView = nullptr},
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &wall_particles_in_buffer_info,
+          .pTexelBufferView = nullptr},
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 2,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &fluid_particles_in_buffer_info,
+          .pTexelBufferView = nullptr},
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 3,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &fluid_particles_out_buffer_info,
+          .pTexelBufferView = nullptr},
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 4,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &bucket_buffer_info,
+          .pTexelBufferView = nullptr},
+      vk::WriteDescriptorSet{
+          .dstSet = *vel_pos_descriptor_set_,
+          .dstBinding = 5,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+          .pImageInfo = &elevation_texture_info},
+  };
+
+  vulkan_device.Device().updateDescriptorSets(descriptor_writes, {});
+}
+
+void simulation::FluidSimulator::CreateVelPosCommandBuffers(
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools) {
+  vk::CommandBufferAllocateInfo primary_allocate_info = {
+      .commandPool = command_pools.Compute(),
+      .level = vk::CommandBufferLevel::ePrimary,
+      .commandBufferCount = 1};
+  auto command_buffers =
+      vk::raii::CommandBuffers(vulkan_device.Device(), primary_allocate_info);
+  vel_pos_command_buffer_ = std::move(command_buffers.front());
+}
+
+void simulation::FluidSimulator::RecordVelPosCommandBuffer() {
+  vel_pos_command_buffer_.reset();
+
+  vk::CommandBufferBeginInfo begin_info{};
+
+  vel_pos_command_buffer_.begin(begin_info);
+
+  vel_pos_command_buffer_.bindPipeline(vk::PipelineBindPoint::eCompute,
+                                       vel_pos_pipeline_);
+  vel_pos_command_buffer_.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                             vel_pos_pipeline_layout_, 0,
+                                             {vel_pos_descriptor_set_}, {});
+  vel_pos_command_buffer_.dispatch(
+      (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
+          kNumThreads,
+      1, 1);
+
+  vel_pos_command_buffer_.end();
+}
+
+[[nodiscard]] uint64_t simulation::FluidSimulator::DispatchVelPos(
+    core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync,
+    uint64_t wait_value) {
+  uint64_t signal_value = frame_sync.GetNextTimelineValue();
+
+  vk::TimelineSemaphoreSubmitInfo timeline_info{
+      .waitSemaphoreValueCount = 1,
+      .pWaitSemaphoreValues = &wait_value,
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = &signal_value};
+
+  std::array<vk::PipelineStageFlags, 1> wait_stages{
+      vk::PipelineStageFlagBits::eComputeShader};
+
+  vk::SubmitInfo submit_info{.pNext = &timeline_info,
+                             .waitSemaphoreCount = 1,
+                             .pWaitSemaphores = &*frame_sync.Semaphore(),
+                             .pWaitDstStageMask = wait_stages.data(),
+                             .commandBufferCount = 1,
+                             .pCommandBuffers = &*vel_pos_command_buffer_,
                              .signalSemaphoreCount = 1,
                              .pSignalSemaphores = &*frame_sync.Semaphore()};
 

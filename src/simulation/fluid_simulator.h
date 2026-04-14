@@ -11,11 +11,16 @@
 #include "../core/vulkan_device.h"
 #include "../resources/buffer.h"
 #include "../resources/descriptor.h"
+#include "../resources/images.h"
 
 namespace simulation {
 
 constexpr uint32_t kNumThreads = 256;
 constexpr uint32_t kClearBucketsNumThreads = 10;
+
+// TODO: Move image loading and texture creation to resources
+// TODO: Delta time push constants
+// TODO: Dispatch vel pos shader
 
 class FluidSimulator {
  public:
@@ -24,8 +29,16 @@ class FluidSimulator {
     uint32_t fluid_particle_count;
     float rest_density;
     float total_fluid_volume;
+    float viscosity;
+    float gas_constant;
+    float coefficient_of_restitution;
+    std::string elevation_texture_filename;
+    float min_elevation;
+    float max_elevation;
+    float friction;
+    float yield_stress;
     glm::uvec4 bucket_size;
-  } __attribute__((aligned(32)));
+  } __attribute__((aligned(128)));
 
   struct UniformBufferObject {  // NOLINT(altera-struct-pack-align)
     uint32_t voxel_max_particles;
@@ -34,8 +47,18 @@ class FluidSimulator {
     uint32_t total_particle_count;
     float rest_density;
     float particle_mass;
+    float effective_radius;
     float effective_radius_2;
+    float effective_radius_6;
     float effective_radius_9;
+    float time_step;
+    float viscosity;
+    float gas_constant;
+    float damping_coefficient;
+    float min_elevation;
+    float max_elevation;
+    float mu;
+    float yield_stress;
     glm::uvec4 bucket_size;
     glm::vec4 min_bound;
     glm::vec4 max_bound;
@@ -90,6 +113,7 @@ class FluidSimulator {
   size_t write_index_ = 1;
 
   void SwapParticleBufferIndices() { std::swap(read_index_, write_index_); }
+  static float DampingCoefficient(float coefficient_of_restitution);
 
   // Bucket Shader
   vk::raii::DescriptorSetLayout bucket_descriptor_set_layout_ = nullptr;
@@ -118,9 +142,9 @@ class FluidSimulator {
   void RecordFluidBucketCommandBuffer();
   void RecordWallBucketCommandBuffer();
   void RecordBucketPrimaryCommandBuffer();
-  [[nodiscard]] uint64_t DispatchBucket(
-      core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync,
-      uint64_t wait_value);
+  [[nodiscard]] uint64_t DispatchBucket(core::VulkanDevice const& vulkan_device,
+                                        core::FrameSync& frame_sync,
+                                        uint64_t wait_value);
 
   // Density Shader
   vk::raii::CommandBuffer density_command_buffer_ = nullptr;
@@ -143,11 +167,34 @@ class FluidSimulator {
   [[nodiscard]] uint64_t DispatchDensity(
       core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync,
       uint64_t wait_value);
+
+  // Vel-Pos Shader
+  std::string elevation_texture_filename_;
+  resources::AllocatedImage elevation_texture_;
+  vk::raii::CommandBuffer vel_pos_command_buffer_ = nullptr;
+  vk::raii::PipelineLayout vel_pos_pipeline_layout_ = nullptr;
+  vk::raii::Pipeline vel_pos_pipeline_ = nullptr;
+  vk::raii::DescriptorSetLayout vel_pos_descriptor_set_layout_ = nullptr;
+  resources::DescriptorAllocator vel_pos_descriptor_allocator_;
+  vk::raii::DescriptorSet vel_pos_descriptor_set_ = nullptr;
+
+  void CreateVelPosDescriptorSetLayout(core::VulkanDevice const& vulkan_device);
+  void CreateVelPosPipeline(core::VulkanDevice const& vulkan_device);
+  void CreateVelPosDescriptorSets(
+      core::VulkanDevice const& vulkan_device,
+      resources::DescriptorAllocator const& descriptor_allocator);
+  void CreateVelPosCommandBuffers(core::VulkanDevice const& vulkan_device,
+                                  core::CommandPools const& command_pools);
+
+  void RecordVelPosCommandBuffer();
+  [[nodiscard]] uint64_t DispatchVelPos(core::VulkanDevice const& vulkan_device,
+                                        core::FrameSync& frame_sync,
+                                        uint64_t wait_value);
 };
 
 }  // namespace simulation
 
-static_assert(sizeof(simulation::FluidSimulator::UniformBufferObject) == 80);
+static_assert(sizeof(simulation::FluidSimulator::UniformBufferObject) == 128);
 static_assert(sizeof(simulation::FluidSimulator::FluidParticle) == 80);
 static_assert(sizeof(simulation::FluidSimulator::WallParticle) == 16);
 
