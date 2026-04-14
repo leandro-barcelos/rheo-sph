@@ -52,6 +52,7 @@ target_sources(
         src/simulation/fluid_simulator.h
 )
 
+target_include_directories(${PROJECT_NAME} PRIVATE vendor)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
 
 if(UNIX AND NOT APPLE)
