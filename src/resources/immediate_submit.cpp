@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "vulkan/vulkan.hpp"
+
 void resources::ImmediateSubmit::CopyBuffer(
     core::VulkanDevice const& vulkan_device,
     core::CommandPools const& command_pools,
@@ -13,12 +15,79 @@ void resources::ImmediateSubmit::CopyBuffer(
   EndSingleTimeCommands(vulkan_device);
 }
 
+void resources::ImmediateSubmit::CopyBufferToImage(
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools,
+    resources::AllocatedBuffer const& buffer,
+    resources::AllocatedImage const& image, uint32_t width, uint32_t height) {
+  BeginSingleTimeCommands(vulkan_device, command_pools);
+  vk::BufferImageCopy region{
+      .bufferOffset = 0,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                           .mipLevel = 0,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1},
+      .imageOffset = {.x = 0, .y = 0, .z = 0},
+      .imageExtent = {.width = width, .height = height, .depth = 1}};
+  command_buffer_.copyBufferToImage(buffer.buffer, image.image,
+                                    vk::ImageLayout::eTransferDstOptimal,
+                                    {region});
+  EndSingleTimeCommands(vulkan_device);
+}
+
+void resources::ImmediateSubmit::TransitionImageLayout(
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools,
+    resources::AllocatedImage const& image, vk::ImageLayout old_layout,
+    vk::ImageLayout new_layout) {
+  BeginSingleTimeCommands(vulkan_device, command_pools);
+
+  vk::ImageMemoryBarrier barrier{
+      .oldLayout = old_layout,
+      .newLayout = new_layout,
+      .image = image.image,
+      .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
+
+  vk::PipelineStageFlags source_stage;
+  vk::PipelineStageFlags destination_stage;
+
+  if (old_layout == vk::ImageLayout::eUndefined &&
+      new_layout == vk::ImageLayout::eTransferDstOptimal) {
+    barrier.srcAccessMask = {};
+    barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+    source_stage = vk::PipelineStageFlagBits::eTopOfPipe;
+    destination_stage = vk::PipelineStageFlagBits::eTransfer;
+  } else if (old_layout == vk::ImageLayout::eTransferDstOptimal &&
+             new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+    source_stage = vk::PipelineStageFlagBits::eTransfer;
+    destination_stage = vk::PipelineStageFlagBits::eComputeShader;
+  } else {
+    throw std::invalid_argument(
+        "[ERROR] Vulkan: unsupported layout transition!");
+  }
+
+  command_buffer_.pipelineBarrier(source_stage, destination_stage, {}, {},
+                                  nullptr, barrier);
+  EndSingleTimeCommands(vulkan_device);
+}
+
 void resources::ImmediateSubmit::BeginSingleTimeCommands(
     core::VulkanDevice const& vulkan_device,
     core::CommandPools const& command_pools) {
   if (command_buffer_ != nullptr) {
     throw std::runtime_error(
-        "[ERROR] Buffer: tried to start a single time command that hasn't been "
+        "[ERROR] Buffer: tried to start a single time command that hasn't "
+        "been "
         "finished yet!");
   }
 

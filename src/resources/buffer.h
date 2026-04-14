@@ -29,11 +29,6 @@ class BufferAllocator {
       std::vector<T> const& objects,
       bool double_buffering = true,
       vk::BufferUsageFlags extra_usage_flags = {});
-
- private:
-  static uint32_t FindMemoryType(core::VulkanDevice const& vulkan_device,
-                                 uint32_t type_filter,
-                                 vk::MemoryPropertyFlags properties);
 };
 
 }  // namespace resources
