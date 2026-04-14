@@ -12,6 +12,13 @@ struct WallParticle {
   float3 position;
 };
 
+struct PushConstants {
+  float time_step;
+};
+
+[[vk::push_constant]]
+PushConstants push_constants;
+
 struct UniformBuffer {
   uint voxel_max_particles;
   uint fluid_particle_count;
@@ -23,7 +30,6 @@ struct UniformBuffer {
   float effective_radius_2;
   float effective_radius_6;
   float effective_radius_9;
-  float time_step;
   float viscosity;
   float gas_constant;
   float damping_coefficient;
@@ -229,15 +235,18 @@ void comp_main(uint3 thread_id: SV_DispatchThreadID) {
                   beta_prime * (1.0 - ubo.damping_coefficient) * delta_v_n_i;
               float3 delta_v_s_i = delta_v_i - delta_v_n_i;
 
-              float f_n_magnitude =
-                  length((2.0 * ubo.particle_mass * modified_normal_vel) / ubo.time_step);
-              float f_s_magnitude = length((2.0 * ubo.particle_mass * delta_v_s_i) / ubo.time_step);
+              float f_n_magnitude = length((2.0 * ubo.particle_mass * modified_normal_vel) /
+                                           push_constants.time_step);
+              float f_s_magnitude =
+                  length((2.0 * ubo.particle_mass * delta_v_s_i) / push_constants.time_step);
 
               if (f_s_magnitude > ubo.mu * f_n_magnitude && f_n_magnitude > epsilon)
                 delta_v_s_i *= ubo.mu * (f_n_magnitude / f_s_magnitude);
 
-              float3 f_normal = (2.0 * ubo.particle_mass * modified_normal_vel) / ubo.time_step;
-              float3 f_tangential = (2.0 * ubo.particle_mass * delta_v_s_i) / ubo.time_step;
+              float3 f_normal =
+                  (2.0 * ubo.particle_mass * modified_normal_vel) / push_constants.time_step;
+              float3 f_tangential =
+                  (2.0 * ubo.particle_mass * delta_v_s_i) / push_constants.time_step;
 
               f_bound += f_normal + f_tangential;
             }
@@ -288,7 +297,7 @@ void comp_main(uint3 thread_id: SV_DispatchThreadID) {
   }
 
   float3 acceleration = a_gravity + (float3(f_press + f_vis) + f_bound) / ubo.particle_mass;
-  float3 velocity_out = velocity_in + float3(acceleration * ubo.time_step);
+  float3 velocity_out = velocity_in + float3(acceleration * push_constants.time_step);
 
   // Maximum allowed velocity to prevent numerical issues
   const float max_speed = 15.0;  // Adjust based on your scene scale
@@ -306,12 +315,12 @@ void comp_main(uint3 thread_id: SV_DispatchThreadID) {
     //     float centerDist = length(toCenter);
     //     if (centerDist > 0.001) {
     //         toCenter = normalize(toCenter);
-    //         velocity_out.xyz += toCenter * ubo.time_step * 2.0;
+    //         velocity_out.xyz += toCenter * push_constants.time_step * 2.0;
     //     }
     // }
   }
 
-  float3 position_out = position + ubo.time_step * velocity_out;
+  float3 position_out = position + push_constants.time_step * velocity_out;
 
   float elevation = get_elevation(position_out.xyz);
   position_out.y = max(position_out.y, elevation);

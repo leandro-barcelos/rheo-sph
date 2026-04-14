@@ -23,7 +23,6 @@ struct UniformBuffer {
   float effective_radius_2;
   float effective_radius_6;
   float effective_radius_9;
-  float time_step;
   float viscosity;
   float gas_constant;
   float damping_coefficient;

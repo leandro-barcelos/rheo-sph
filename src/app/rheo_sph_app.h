@@ -48,6 +48,8 @@ class RheoSPHApp {
   core::FrameSync frame_sync_;
   simulation::FluidSimulator fluid_simulator_;
   renderer::FluidRenderer fluid_renderer_;
+  double last_time_ = 0;
+  double delta_time_ = 0;
 };
 }  // namespace app
 

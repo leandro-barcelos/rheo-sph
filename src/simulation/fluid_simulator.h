@@ -1,6 +1,8 @@
 #ifndef RHEOSPH_FLUID_SIMULATOR_H
 #define RHEOSPH_FLUID_SIMULATOR_H
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <utility>
@@ -17,10 +19,6 @@ namespace simulation {
 
 constexpr uint32_t kNumThreads = 256;
 constexpr uint32_t kClearBucketsNumThreads = 10;
-
-// TODO: Move image loading and texture creation to resources
-// TODO: Delta time push constants
-// TODO: Dispatch vel pos shader
 
 class FluidSimulator {
  public:
@@ -51,7 +49,6 @@ class FluidSimulator {
     float effective_radius_2;
     float effective_radius_6;
     float effective_radius_9;
-    float time_step;
     float viscosity;
     float gas_constant;
     float damping_coefficient;
@@ -59,6 +56,7 @@ class FluidSimulator {
     float max_elevation;
     float mu;
     float yield_stress;
+    std::array<uint32_t, 3> padding0;
     glm::uvec4 bucket_size;
     glm::vec4 min_bound;
     glm::vec4 max_bound;
@@ -80,12 +78,16 @@ class FluidSimulator {
     glm::vec3 position;
   } __attribute__((aligned(16)));
 
+  struct PushConstants {
+    float time_step;
+  };
+
   explicit FluidSimulator(Parameters const& parameters);
 
   void Init(core::VulkanDevice const& vulkan_device,
             core::CommandPools const& command_pools);
   [[nodiscard]] uint64_t Run(core::VulkanDevice const& vulkan_device,
-                             core::FrameSync& frame_sync);
+                             core::FrameSync& frame_sync, double delta_time);
 
   [[nodiscard]] resources::AllocatedBuffer const& FluidParticlesReadBuffer()
       const {
@@ -171,6 +173,7 @@ class FluidSimulator {
   // Vel-Pos Shader
   std::string elevation_texture_filename_;
   resources::AllocatedImage elevation_texture_;
+  PushConstants push_constants_{};
   vk::raii::CommandBuffer vel_pos_command_buffer_ = nullptr;
   vk::raii::PipelineLayout vel_pos_pipeline_layout_ = nullptr;
   vk::raii::Pipeline vel_pos_pipeline_ = nullptr;
@@ -195,6 +198,12 @@ class FluidSimulator {
 }  // namespace simulation
 
 static_assert(sizeof(simulation::FluidSimulator::UniformBufferObject) == 128);
+static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
+                       bucket_size) == 80);
+static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
+                       min_bound) == 96);
+static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
+                       max_bound) == 112);
 static_assert(sizeof(simulation::FluidSimulator::FluidParticle) == 80);
 static_assert(sizeof(simulation::FluidSimulator::WallParticle) == 16);
 

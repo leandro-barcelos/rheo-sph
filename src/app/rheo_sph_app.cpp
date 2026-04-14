@@ -28,7 +28,10 @@ void app::RheoSPHApp::Init() {
 }
 
 void app::RheoSPHApp::MainLoop() {
+  last_time_ = 0;
   while (!window_.ShouldClose()) {  // NOLINT(*-id-dependent-backward-branch)
+    core::Window::PollEvents();
+
     uint32_t image_index =
         vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
 
@@ -38,12 +41,14 @@ void app::RheoSPHApp::MainLoop() {
     }
 
     uint64_t simulation_signal_value =
-        fluid_simulator_.Run(vulkan_device_, frame_sync_);
+        fluid_simulator_.Run(vulkan_device_, frame_sync_, delta_time_);
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
-                 fluid_simulator_, image_index, window_,
-                 simulation_signal_value);
+                           fluid_simulator_, image_index, window_,
+                           simulation_signal_value);
 
-    core::Window::PollEvents();
+    double current_time = glfwGetTime();
+    delta_time_ = (current_time - last_time_) * 1000.0;
+    last_time_ = current_time;
   }
 }

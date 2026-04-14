@@ -105,6 +105,7 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
       .max_elevation = parameters.max_elevation,
       .mu = parameters.friction,
       .yield_stress = parameters.yield_stress,
+            .padding0 = {0U, 0U, 0U},
       .bucket_size = parameters.bucket_size,
       .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
       .max_bound = {1.0F, 1.0F, 1.0F, 0.0F}};
@@ -161,7 +162,9 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
 }
 
 uint64_t simulation::FluidSimulator::Run(
-    core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync) {
+    core::VulkanDevice const& vulkan_device, core::FrameSync& frame_sync,
+    double delta_time) {
+  push_constants_.time_step = static_cast<float>(delta_time);
   uint64_t simulation_wait_value = frame_sync.CurrentTimelineValue();
 
   RecordClearBucketCommandBuffer();
@@ -654,8 +657,15 @@ void simulation::FluidSimulator::CreateVelPosDescriptorSetLayout(
 
 void simulation::FluidSimulator::CreateVelPosPipeline(
     core::VulkanDevice const& vulkan_device) {
+  vk::PushConstantRange push_contant{
+      .stageFlags = vk::ShaderStageFlagBits::eCompute,
+      .offset = 0,
+      .size = sizeof(simulation::FluidSimulator::PushConstants)};
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
-      .setLayoutCount = 1, .pSetLayouts = &*vel_pos_descriptor_set_layout_};
+      .setLayoutCount = 1,
+      .pSetLayouts = &*vel_pos_descriptor_set_layout_,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &push_contant};
   vel_pos_pipeline_layout_ =
       vk::raii::PipelineLayout(vulkan_device.Device(), pipeline_layout_info);
 
@@ -774,6 +784,9 @@ void simulation::FluidSimulator::RecordVelPosCommandBuffer() {
   vel_pos_command_buffer_.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                              vel_pos_pipeline_layout_, 0,
                                              {vel_pos_descriptor_set_}, {});
+  vel_pos_command_buffer_.pushConstants(
+      vel_pos_pipeline_layout_, vk::ShaderStageFlagBits::eCompute, 0,
+      vk::ArrayProxy<const PushConstants>(push_constants_));
   vel_pos_command_buffer_.dispatch(
       (uniform_buffer_data_.fluid_particle_count + kNumThreads - 1) /
           kNumThreads,
