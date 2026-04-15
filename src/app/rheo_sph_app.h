@@ -57,7 +57,7 @@ class RheoSPHApp {
   renderer::FluidRenderer fluid_renderer_;
   ui::ImGuiLayer imgui_layer_;
   ui::MenuBarPanel menu_bar_panel_;
-    bool simulation_running_ = true;
+  bool simulation_running_ = false;
   bool recreate_simulation_requested_ = false;
   std::string pending_elevation_texture_path_;
   double last_time_ = 0;

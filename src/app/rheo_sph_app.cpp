@@ -3,7 +3,6 @@
 #include <optional>
 
 #include "imgui.h"
-#include "imgui.h"
 #include "../ui/panels/top_bar_panel.h"
 
 namespace {
@@ -11,7 +10,7 @@ namespace {
 void DrawMainDockspaceBelowTopBars() {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   float const reserved_top_height =
-    ImGui::GetFrameHeight() + ui::TopBarPanel::kToolbarHeight;
+  ImGui::GetFrameHeight() + ui::TopBarPanel::kToolbarHeight;
 
   ImGui::SetNextWindowPos(
     ImVec2(viewport->Pos.x, viewport->Pos.y + reserved_top_height));
