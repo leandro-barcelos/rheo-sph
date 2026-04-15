@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -104,7 +105,7 @@ target_sources(
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm imgui)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)
