@@ -24,7 +24,6 @@ class FluidSimulator {
  public:
   struct Parameters {
     uint32_t voxel_max_particles;
-    uint32_t fluid_particle_count;
     float rest_density;
     float total_fluid_volume;
     float viscosity;
@@ -35,7 +34,7 @@ class FluidSimulator {
     float max_elevation;
     float friction;
     float yield_stress;
-    glm::uvec4 bucket_size;
+    float initial_particle_spacing;
   } __attribute__((aligned(128)));
 
   struct UniformBufferObject {  // NOLINT(altera-struct-pack-align)

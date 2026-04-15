@@ -117,14 +117,23 @@ vk::Extent2D core::VulkanSwapChain::ChooseExtent(
 vk::SurfaceFormatKHR core::VulkanSwapChain::ChooseSurfaceFormat(
     std::vector<vk::SurfaceFormatKHR> const& available_formats) {
   assert(!available_formats.empty());
-  const auto format_it =
+  const auto unorm_format_it =
+      std::ranges::find_if(available_formats, [](const auto& format) {
+        return format.format == vk::Format::eB8G8R8A8Unorm &&
+               format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+      });
+  if (unorm_format_it != available_formats.end()) {
+    return *unorm_format_it;
+  }
+
+  const auto srgb_format_it =
       std::ranges::find_if(available_formats, [](const auto& format) {
         return format.format == vk::Format::eB8G8R8A8Srgb &&
                format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
       });
 
-  return format_it != available_formats.end() ? *format_it
-                                              : available_formats.at(0);
+  return srgb_format_it != available_formats.end() ? *srgb_format_it
+                                                   : available_formats.at(0);
 }
 
 uint32_t core::VulkanSwapChain::ChooseMinImageCount(

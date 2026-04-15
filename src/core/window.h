@@ -46,6 +46,7 @@ class Window {
   [[nodiscard]] std::vector<vk::PresentModeKHR> PresentModes(
       VulkanDevice const& vulkan_device) const;
   [[nodiscard]] vk::raii::SurfaceKHR const& Surface() const { return surface_; }
+  [[nodiscard]] GLFWwindow* Handle() const { return window_; }
 
  private:
   GLFWwindow* window_;

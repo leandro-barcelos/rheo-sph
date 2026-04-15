@@ -38,6 +38,9 @@ class VulkanSwapChain {
   [[nodiscard]] vk::raii::ImageView const& GetImageView(uint32_t index) const {
     return image_views_.at(index);
   }
+  [[nodiscard]] uint32_t ImageCount() const {
+    return static_cast<uint32_t>(images_.size());
+  }
   [[nodiscard]] vk::Extent2D const& Extent() const { return extent_; }
 
  private:
