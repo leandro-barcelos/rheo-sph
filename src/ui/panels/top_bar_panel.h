@@ -13,7 +13,7 @@ class TopBarPanel {
     bool reset_pressed = false;
   };
 
-  [[nodiscard]] static Events Draw(bool simulation_running);
+  [[nodiscard]] static Events Draw(bool simulation_running, bool can_play);
 };
 
 }  // namespace ui

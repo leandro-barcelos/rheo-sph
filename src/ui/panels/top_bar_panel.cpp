@@ -3,7 +3,8 @@
 #include "IconsFontAwesome6.h"
 #include "imgui.h"
 
-ui::TopBarPanel::Events ui::TopBarPanel::Draw(bool simulation_running) {
+ui::TopBarPanel::Events ui::TopBarPanel::Draw(bool simulation_running,
+                                              bool can_play) {
   Events events{};
 
   ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -29,13 +30,17 @@ ui::TopBarPanel::Events ui::TopBarPanel::Draw(bool simulation_running) {
     }
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6.0F);
 
-    ImGui::BeginDisabled(simulation_running);
+    ImGui::BeginDisabled(simulation_running || !can_play);
     if (ImGui::Button(ICON_FA_PLAY)) {
       events.play_pressed = true;
     }
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-      ImGui::SetTooltip("Play");
+      if (can_play) {
+        ImGui::SetTooltip("Play");
+      } else {
+        ImGui::SetTooltip("Define all parameters and upload a texture first");
+      }
     }
 
     ImGui::SameLine();

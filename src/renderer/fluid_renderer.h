@@ -20,7 +20,7 @@ class FluidRenderer {
   void Render(core::VulkanDevice const& vulkan_device,
               core::VulkanSwapChain& vulkan_swap_chain,
               core::FrameSync& frame_sync,
-              simulation::FluidSimulator const& fluid_simulator,
+              simulation::FluidSimulator const* fluid_simulator,
               uint32_t image_index, core::Window const& window,
               std::optional<uint64_t> simulation_signal_value,
               std::function<void(vk::raii::CommandBuffer const&)> const&
@@ -38,7 +38,7 @@ class FluidRenderer {
                                    core::CommandPools const& command_pools);
   void RecordGraphicsCommandBuffer(
       core::VulkanSwapChain& vulkan_swap_chain, uint32_t image_index,
-      simulation::FluidSimulator const& fluid_simulator,
+      simulation::FluidSimulator const* fluid_simulator,
       std::function<void(vk::raii::CommandBuffer const&)> const&
           ui_draw_callback);
   void TransitionImageLayout(core::VulkanSwapChain const& vulkan_swap_chain,
