@@ -97,6 +97,8 @@ target_sources(
         src/ui/imgui_layer.h
         src/ui/panels/menu_bar_panel.cpp
         src/ui/panels/menu_bar_panel.h
+        src/ui/panels/top_bar_panel.cpp
+        src/ui/panels/top_bar_panel.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)

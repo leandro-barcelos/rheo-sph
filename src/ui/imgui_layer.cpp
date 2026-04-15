@@ -2,11 +2,33 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <stdexcept>
 
+#include "IconsFontAwesome6.h"
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+
+namespace {
+
+std::string ResolveIconFontPath() {
+  constexpr std::array kCandidates = {
+      "resources/fonts/fa-solid-900.ttf",
+      "../resources/fonts/fa-solid-900.ttf",
+      "../../resources/fonts/fa-solid-900.ttf",
+  };
+
+  for (const char* candidate : kCandidates) {
+    if (std::filesystem::exists(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw std::runtime_error("[ERROR] ImGui: Font Awesome TTF not found");
+}
+
+}  // namespace
 
 ui::ImGuiLayer::~ImGuiLayer() { Shutdown(); }
 
@@ -53,6 +75,27 @@ void ui::ImGuiLayer::Init(core::Window const& window,
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImGuiIO& imgui_io = ImGui::GetIO();
+  imgui_io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+  imgui_io.Fonts->AddFontDefault();
+
+  ImFontConfig icon_font_config;
+  icon_font_config.MergeMode = true;
+  icon_font_config.GlyphMinAdvanceX = 13.0F;
+
+  static constexpr std::array<ImWchar, 3> kIconGlyphRanges = {
+      ICON_MIN_FA,
+      ICON_MAX_16_FA,
+      0,
+  };
+
+  std::string icon_font_path = ResolveIconFontPath();
+  if (imgui_io.Fonts->AddFontFromFileTTF(icon_font_path.c_str(), 13.0F,
+                                         &icon_font_config,
+                                         kIconGlyphRanges.data()) == nullptr) {
+    throw std::runtime_error("[ERROR] ImGui: failed to load Font Awesome TTF");
+  }
 
   ImGui::StyleColorsLight();
   ImGuiStyle& style = ImGui::GetStyle();

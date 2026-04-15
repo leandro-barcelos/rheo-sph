@@ -2,6 +2,43 @@
 
 #include <optional>
 
+#include "imgui.h"
+#include "imgui.h"
+#include "../ui/panels/top_bar_panel.h"
+
+namespace {
+
+void DrawMainDockspaceBelowTopBars() {
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  float const reserved_top_height =
+    ImGui::GetFrameHeight() + ui::TopBarPanel::kToolbarHeight;
+
+  ImGui::SetNextWindowPos(
+    ImVec2(viewport->Pos.x, viewport->Pos.y + reserved_top_height));
+  ImGui::SetNextWindowSize(
+    ImVec2(viewport->Size.x, viewport->Size.y - reserved_top_height));
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  ImGuiWindowFlags const window_flags =
+    ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+    ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
+  ImGui::Begin("MainDockspaceHost", nullptr, window_flags);
+  ImGui::PopStyleVar(3);
+
+  ImGuiID const dockspace_id = ImGui::GetID("MainDockspace");
+  ImGui::DockSpace(dockspace_id, ImVec2(0.0F, 0.0F),
+           ImGuiDockNodeFlags_PassthruCentralNode);
+  ImGui::End();
+}
+
+}  // namespace
+
 void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
@@ -56,6 +93,7 @@ void app::RheoSPHApp::MainLoop() {
     }
 
     imgui_layer_.BeginFrame();
+
     std::optional<std::string> const uploaded_texture_path =
         menu_bar_panel_.Draw();
     if (uploaded_texture_path.has_value() &&
@@ -64,10 +102,28 @@ void app::RheoSPHApp::MainLoop() {
       menu_bar_panel_.SetElevationTexturePath(*uploaded_texture_path);
       recreate_simulation_requested_ = true;
     }
+
+    ui::TopBarPanel::Events const top_bar_events =
+      ui::TopBarPanel::Draw(simulation_running_);
+    if (top_bar_events.play_pressed) {
+      simulation_running_ = true;
+    }
+    if (top_bar_events.pause_pressed) {
+      simulation_running_ = false;
+    }
+    if (top_bar_events.reset_pressed) {
+      recreate_simulation_requested_ = true;
+    }
+
+    DrawMainDockspaceBelowTopBars();
+
     imgui_layer_.EndFrame();
 
-    uint64_t simulation_signal_value =
-        fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
+    std::optional<uint64_t> simulation_signal_value;
+    if (simulation_running_) {
+      simulation_signal_value =
+          fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
+    }
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
                            *fluid_simulator_, image_index, window_,
