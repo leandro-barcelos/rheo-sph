@@ -2,6 +2,7 @@
 #define RHEOSPH_APP_H
 
 #include <memory>
+#include <string>
 
 #include "../core/command_pool.h"
 #include "../core/frame_sync.h"
@@ -12,6 +13,7 @@
 #include "../renderer/fluid_renderer.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/imgui_layer.h"
+#include "../ui/panels/menu_bar_panel.h"
 
 namespace app {
 
@@ -21,8 +23,8 @@ constexpr core::WindowProperties kWindowProperties{
 class RheoSPHApp {
  public:
   RheoSPHApp()
-            : window_(kWindowProperties),
-                simulation_parameters_(simulation::FluidSimulator::Parameters{
+      : window_(kWindowProperties),
+        simulation_parameters_(simulation::FluidSimulator::Parameters{
             .voxel_max_particles = 10,
             .fluid_particle_count = 500,
             .rest_density = 1000,
@@ -42,7 +44,7 @@ class RheoSPHApp {
  private:
   void Init();
   void MainLoop();
-    void RecreateFluidSimulator();
+  void RecreateFluidSimulator();
 
   core::VulkanContext context_;
   core::Window window_;
@@ -50,10 +52,13 @@ class RheoSPHApp {
   core::VulkanSwapChain vulkan_swap_chain_;
   core::CommandPools command_pools_;
   core::FrameSync frame_sync_;
-    simulation::FluidSimulator::Parameters simulation_parameters_;
-    std::unique_ptr<simulation::FluidSimulator> fluid_simulator_;
+  simulation::FluidSimulator::Parameters simulation_parameters_;
+  std::unique_ptr<simulation::FluidSimulator> fluid_simulator_;
   renderer::FluidRenderer fluid_renderer_;
   ui::ImGuiLayer imgui_layer_;
+  ui::MenuBarPanel menu_bar_panel_;
+  bool recreate_simulation_requested_ = false;
+  std::string pending_elevation_texture_path_;
   double last_time_ = 0;
   double delta_time_ = 0;
 };

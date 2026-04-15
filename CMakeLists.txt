@@ -23,6 +23,9 @@ target_compile_definitions(
 )
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
+set(IMGUI_FILE_DIALOG_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui-file-dialog
+)
 
 set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui.cpp
@@ -33,13 +36,18 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    ${IMGUI_FILE_DIALOG_DIR}/ImGuiFileDialog.cpp
 )
 
 add_library(imgui STATIC ${IMGUI_SOURCES})
 
 target_include_directories(
     imgui
-    PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${Vulkan_INCLUDE_DIRS}
+    PUBLIC
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${Vulkan_INCLUDE_DIRS}
+        ${IMGUI_FILE_DIALOG_DIR}
 )
 
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
@@ -87,6 +95,8 @@ target_sources(
         src/simulation/fluid_simulator.h
         src/ui/imgui_layer.cpp
         src/ui/imgui_layer.h
+        src/ui/panels/menu_bar_panel.cpp
+        src/ui/panels/menu_bar_panel.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)

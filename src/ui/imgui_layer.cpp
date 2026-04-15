@@ -54,6 +54,15 @@ void ui::ImGuiLayer::Init(core::Window const& window,
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
 
+  ImGui::StyleColorsLight();
+  ImGuiStyle& style = ImGui::GetStyle();
+  style.WindowRounding = 0.0F;
+  style.FrameRounding = 2.0F;
+  style.GrabRounding = 2.0F;
+  style.ScrollbarRounding = 2.0F;
+  style.WindowBorderSize = 1.0F;
+  style.FrameBorderSize = 1.0F;
+
   ImGui_ImplGlfw_InitForVulkan(window.Handle(), true);
 
   auto color_attachment_format =
@@ -94,6 +103,13 @@ void ui::ImGuiLayer::BeginFrame() const {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+}
+
+void ui::ImGuiLayer::EndFrame() const {
+  if (!initialized_) {
+    return;
+  }
+
   ImGui::Render();
 }
 

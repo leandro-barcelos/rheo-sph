@@ -24,6 +24,7 @@ class ImGuiLayer {
             core::VulkanDevice const& vulkan_device,
             core::VulkanSwapChain const& vulkan_swap_chain);
   void BeginFrame() const;
+  void EndFrame() const;
   void Render(vk::raii::CommandBuffer const& command_buffer) const;
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
   void Shutdown();

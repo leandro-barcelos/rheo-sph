@@ -1,5 +1,7 @@
 #include "rheo_sph_app.h"
 
+#include <optional>
+
 void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
@@ -28,12 +30,21 @@ void app::RheoSPHApp::Init() {
   fluid_renderer_.Init(vulkan_device_, vulkan_swap_chain_, command_pools_);
   // UI (no widgets yet)
   imgui_layer_.Init(window_, context_, vulkan_device_, vulkan_swap_chain_);
+  menu_bar_panel_.SetElevationTexturePath(
+      simulation_parameters_.elevation_texture_filename);
 }
 
 void app::RheoSPHApp::MainLoop() {
   last_time_ = 0;
   while (!window_.ShouldClose()) {  // NOLINT(*-id-dependent-backward-branch)
     core::Window::PollEvents();
+
+    if (recreate_simulation_requested_) {
+      simulation_parameters_.elevation_texture_filename =
+          pending_elevation_texture_path_;
+      RecreateFluidSimulator();
+      recreate_simulation_requested_ = false;
+    }
 
     uint32_t image_index =
         vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
@@ -45,8 +56,18 @@ void app::RheoSPHApp::MainLoop() {
     }
 
     imgui_layer_.BeginFrame();
+    std::optional<std::string> const uploaded_texture_path =
+        menu_bar_panel_.Draw();
+    if (uploaded_texture_path.has_value() &&
+        !uploaded_texture_path->empty()) {
+      pending_elevation_texture_path_ = *uploaded_texture_path;
+      menu_bar_panel_.SetElevationTexturePath(*uploaded_texture_path);
+      recreate_simulation_requested_ = true;
+    }
+    imgui_layer_.EndFrame();
+
     uint64_t simulation_signal_value =
-      fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
+        fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
                            *fluid_simulator_, image_index, window_,
