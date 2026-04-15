@@ -7,28 +7,14 @@ ui::TopBarPanel::Events ui::TopBarPanel::Draw(bool simulation_running,
                                               bool can_play) {
   Events events{};
 
-  ImGuiViewport* viewport = ImGui::GetMainViewport();
-  float const menu_bar_height = ImGui::GetFrameHeight();
-
-  ImGui::SetNextWindowPos(
-      ImVec2(viewport->Pos.x, viewport->Pos.y + menu_bar_height));
-  ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, kToolbarHeight));
-  ImGui::SetNextWindowViewport(viewport->ID);
+  ImGui::SetNextWindowPos(ImVec2(12.0F, 36.0F), ImGuiCond_FirstUseEver);
 
   ImGuiWindowFlags const window_flags =
-      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoDecoration |
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-      ImGuiWindowFlags_NoFocusOnAppearing |
-      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoScrollbar |
+      ImGuiWindowFlags_NoScrollWithMouse |
+      ImGuiWindowFlags_AlwaysAutoResize;
 
-  if (ImGui::Begin("TopToolbarWindow", nullptr, window_flags)) {
-    float const button_size = ImGui::GetFrameHeight();
-    float const y_offset = (kToolbarHeight - button_size) * 0.5F;
-    if (y_offset > 0.0F) {
-      ImGui::SetCursorPosY(y_offset);
-    }
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6.0F);
+  if (ImGui::Begin("Controls", nullptr, window_flags)) {
 
     ImGui::BeginDisabled(simulation_running || !can_play);
     if (ImGui::Button(ICON_FA_PLAY)) {

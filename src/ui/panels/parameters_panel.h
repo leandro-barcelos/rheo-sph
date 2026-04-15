@@ -24,7 +24,7 @@ class ParametersPanel {
 
   static constexpr float kPanelWidth = 340.0F;
 
-  [[nodiscard]] bool Draw(float top_offset, float viewport_height);
+  [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
   [[nodiscard]] Values const& GetValues() const;
 

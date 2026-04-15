@@ -76,7 +76,6 @@ void ui::ImGuiLayer::Init(core::Window const& window,
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& imgui_io = ImGui::GetIO();
-  imgui_io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
   imgui_io.Fonts->AddFontDefault();
 

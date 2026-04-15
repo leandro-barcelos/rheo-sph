@@ -65,20 +65,14 @@ bool ui::ParametersPanel::DrawOptionalSliderUInt(char const* label,
   return changed;
 }
 
-bool ui::ParametersPanel::Draw(float top_offset, float viewport_height) {
+bool ui::ParametersPanel::Draw() {
   bool changed = false;
 
-  ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + top_offset),
-                          ImGuiCond_Always);
-  ImGui::SetNextWindowSize(
-      ImVec2(kPanelWidth, viewport_height - top_offset), ImGuiCond_Always);
-  ImGui::SetNextWindowViewport(viewport->ID);
+  ImGui::SetNextWindowPos(ImVec2(12.0F, 90.0F), ImGuiCond_FirstUseEver);
 
   ImGuiWindowFlags const window_flags =
-      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse |
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoSavedSettings;
+  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse |
+  ImGuiWindowFlags_AlwaysAutoResize;
 
   if (ImGui::Begin("Parameters", nullptr, window_flags)) {
     changed |= DrawOptionalInputFloat("Total fluid volume",

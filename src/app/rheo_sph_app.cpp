@@ -2,39 +2,9 @@
 
 #include <optional>
 
-#include "imgui.h"
 #include "../ui/panels/top_bar_panel.h"
 
 namespace {
-
-void DrawMainDockspaceBelowTopBars() {
-  ImGuiViewport* viewport = ImGui::GetMainViewport();
-  float const reserved_top_height =
-  ImGui::GetFrameHeight() + ui::TopBarPanel::kToolbarHeight;
-
-  ImGui::SetNextWindowPos(
-    ImVec2(viewport->Pos.x, viewport->Pos.y + reserved_top_height));
-  ImGui::SetNextWindowSize(
-    ImVec2(viewport->Size.x, viewport->Size.y - reserved_top_height));
-  ImGui::SetNextWindowViewport(viewport->ID);
-
-  ImGuiWindowFlags const window_flags =
-    ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-    ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
-  ImGui::Begin("MainDockspaceHost", nullptr, window_flags);
-  ImGui::PopStyleVar(3);
-
-  ImGuiID const dockspace_id = ImGui::GetID("MainDockspace");
-  ImGui::DockSpace(dockspace_id, ImVec2(0.0F, 0.0F),
-           ImGuiDockNodeFlags_PassthruCentralNode);
-  ImGui::End();
-}
 
 std::optional<simulation::FluidSimulator::Parameters> BuildSimulationParameters(
     ui::ParametersPanel::Values const& values,
@@ -121,11 +91,7 @@ void app::RheoSPHApp::MainLoop() {
       parameters_dirty_ = true;
     }
 
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    float const top_offset =
-        ImGui::GetFrameHeight() + ui::TopBarPanel::kToolbarHeight;
-    bool const parameters_changed =
-        parameters_panel_.Draw(top_offset, viewport->Size.y);
+    bool const parameters_changed = parameters_panel_.Draw();
     if (parameters_changed) {
       parameters_dirty_ = true;
     }
@@ -156,8 +122,6 @@ void app::RheoSPHApp::MainLoop() {
         parameters_dirty_ = false;
       }
     }
-
-    DrawMainDockspaceBelowTopBars();
 
     imgui_layer_.EndFrame();
 
