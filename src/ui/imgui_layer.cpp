@@ -97,7 +97,6 @@ void ui::ImGuiLayer::Init(core::Window const& window,
     throw std::runtime_error("[ERROR] ImGui: failed to load Font Awesome TTF");
   }
 
-  ImGui::StyleColorsLight();
   ImGuiStyle& style = ImGui::GetStyle();
   style.WindowRounding = 0.0F;
   style.FrameRounding = 2.0F;
