@@ -35,7 +35,7 @@ class FluidSimulator {
     float max_elevation;
     float friction;
     float yield_stress;
-    glm::uvec4 bucket_size;
+    float initial_particle_spacing;
   } __attribute__((aligned(128)));
 
   struct UniformBufferObject {  // NOLINT(altera-struct-pack-align)

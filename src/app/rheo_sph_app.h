@@ -37,7 +37,7 @@ class RheoSPHApp {
             .max_elevation = 1120,
             .friction = 0,
             .yield_stress = 59.82,
-            .bucket_size = {50, 50, 50, 0},
+            .initial_particle_spacing = 1.0F / 9.0F,
         }) {}
   void Run();
 

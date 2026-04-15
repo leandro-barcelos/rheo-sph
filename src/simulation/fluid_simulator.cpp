@@ -55,7 +55,10 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
   fluid_particles_.reserve(requested_fluid_particle_count);
   wall_particles_.reserve(max_wall_count);
 
-  const float step = 1.0F / static_cast<float>(grid_resolution - 1);
+    const float fallback_step = 1.0F / static_cast<float>(grid_resolution - 1);
+    const float step = parameters.initial_particle_spacing > 0.0F
+                                                 ? parameters.initial_particle_spacing
+                                                 : fallback_step;
   for (uint32_t z_index = 0; z_index < grid_resolution; ++z_index) {
     for (uint32_t y_index = 0; y_index < grid_resolution; ++y_index) {
       for (uint32_t x_index = 0; x_index < grid_resolution; ++x_index) {
@@ -84,6 +87,16 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
 
   float total_mass = parameters.rest_density * parameters.total_fluid_volume;
   float effective_radius = step * 1.2F;
+  const float simulation_extent =
+      step * static_cast<float>(grid_resolution - 1);
+  const glm::vec4 max_bound = {simulation_extent, simulation_extent,
+                               simulation_extent, 0.0F};
+  const float bucket_cell_size = std::max(effective_radius, 1e-6F);
+  const uint32_t bucket_axis_size =
+      static_cast<uint32_t>(std::ceil(simulation_extent / bucket_cell_size)) +
+      1U;
+  const glm::uvec4 bucket_size =
+      {bucket_axis_size, bucket_axis_size, bucket_axis_size, 0U};
 
   uniform_buffer_data_ = {
       .voxel_max_particles = parameters.voxel_max_particles,
@@ -104,11 +117,11 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
       .min_elevation = parameters.min_elevation,
       .max_elevation = parameters.max_elevation,
       .mu = parameters.friction,
-      .yield_stress = parameters.yield_stress,
-            .padding0 = {0U, 0U, 0U},
-      .bucket_size = parameters.bucket_size,
-      .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
-      .max_bound = {1.0F, 1.0F, 1.0F, 0.0F}};
+    .yield_stress = parameters.yield_stress,
+    .padding0 = {0U, 0U, 0U},
+    .bucket_size = bucket_size,
+    .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
+    .max_bound = max_bound};
 
   bucket_.resize(
       static_cast<std::size_t>(uniform_buffer_data_.bucket_size[0]) *
