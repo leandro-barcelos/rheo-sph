@@ -68,6 +68,8 @@ void app::RheoSPHApp::Init() {
   imgui_layer_.Init(window_, context_, vulkan_device_, vulkan_swap_chain_);
   menu_bar_panel_.SetElevationTexturePath(
       simulation_parameters_.elevation_texture_filename);
+    pending_elevation_texture_path_ =
+      simulation_parameters_.elevation_texture_filename;
 }
 
 void app::RheoSPHApp::MainLoop() {
@@ -76,8 +78,13 @@ void app::RheoSPHApp::MainLoop() {
     core::Window::PollEvents();
 
     if (recreate_simulation_requested_) {
-      simulation_parameters_.elevation_texture_filename =
-          pending_elevation_texture_path_;
+      if (!pending_elevation_texture_path_.empty()) {
+        simulation_parameters_.elevation_texture_filename =
+            pending_elevation_texture_path_;
+      } else {
+        pending_elevation_texture_path_ =
+            simulation_parameters_.elevation_texture_filename;
+      }
       RecreateFluidSimulator();
       recreate_simulation_requested_ = false;
     }
@@ -111,6 +118,7 @@ void app::RheoSPHApp::MainLoop() {
       simulation_running_ = false;
     }
     if (top_bar_events.reset_pressed) {
+      simulation_running_ = false;
       recreate_simulation_requested_ = true;
     }
 

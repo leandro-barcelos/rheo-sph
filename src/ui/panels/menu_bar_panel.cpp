@@ -40,8 +40,8 @@ std::optional<std::string> ui::MenuBarPanel::Draw() {
       kUploadDialogKey, ImGuiWindowFlags_NoCollapse, ImVec2(600.0F, 450.0F),
       ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
-      uploaded_texture_path =
-          ImGuiFileDialog::Instance()->GetFilePathName(IGFD_ResultMode_KeepInputFile);
+        uploaded_texture_path =
+            ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
   }
