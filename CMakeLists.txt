@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 4.2)
 project(rheo-sph)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -17,6 +21,33 @@ target_compile_definitions(
         VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
         VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
 )
+
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
+
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
+
+target_include_directories(
+    imgui
+    PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${Vulkan_INCLUDE_DIRS}
+)
+
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan glfw)
+
+target_compile_definitions(imgui PUBLIC VK_USE_PLATFORM_XLIB_KHR)
+
+set(IMGUI_DIR external/imgui)
+include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
 
 add_executable(${PROJECT_NAME})
 
@@ -57,7 +88,7 @@ target_sources(
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm imgui)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)
