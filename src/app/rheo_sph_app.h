@@ -34,6 +34,8 @@ class RheoSPHApp {
   void RecreateFluidSimulator();
   void RecreateElevationTexturePreview(std::string const& texture_path);
   void DestroyElevationTexturePreview();
+  [[nodiscard]] bool SaveSimulationParameters(std::string const& file_path) const;
+  [[nodiscard]] bool LoadSimulationParameters(std::string const& file_path);
 
   core::VulkanContext context_;
   core::Window window_;

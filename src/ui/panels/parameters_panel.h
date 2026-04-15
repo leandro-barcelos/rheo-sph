@@ -29,6 +29,7 @@ class ParametersPanel {
   [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
   [[nodiscard]] Values const& GetValues() const;
+  void SetValues(Values const& values);
   void SetElevationTexturePreview(TextureId texture_id);
 
  private:
