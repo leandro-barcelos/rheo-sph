@@ -2,6 +2,7 @@
 #define RHEOSPH_FLUID_RENDERER_H
 
 #include <functional>
+#include <optional>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "../core/command_pool.h"
@@ -21,7 +22,7 @@ class FluidRenderer {
               core::FrameSync& frame_sync,
               simulation::FluidSimulator const& fluid_simulator,
               uint32_t image_index, core::Window const& window,
-              uint64_t simulation_signal_value,
+              std::optional<uint64_t> simulation_signal_value,
               std::function<void(vk::raii::CommandBuffer const&)> const&
                   ui_draw_callback = {});
 

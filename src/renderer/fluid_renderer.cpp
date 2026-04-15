@@ -18,27 +18,31 @@ void renderer::FluidRenderer::Render(
     core::VulkanSwapChain& vulkan_swap_chain, core::FrameSync& frame_sync,
     simulation::FluidSimulator const& fluid_simulator,
     uint32_t image_index, core::Window const& window,
-    uint64_t simulation_signal_value,
+    std::optional<uint64_t> simulation_signal_value,
     std::function<void(vk::raii::CommandBuffer const&)> const&
         ui_draw_callback) {
-  uint64_t graphics_wait_value = simulation_signal_value;
+  uint64_t graphics_wait_value = simulation_signal_value.value_or(0);
   uint64_t graphics_signal_value = frame_sync.GetNextTimelineValue();
 
-    RecordGraphicsCommandBuffer(vulkan_swap_chain, image_index, fluid_simulator,
-                                                            ui_draw_callback);
+  RecordGraphicsCommandBuffer(vulkan_swap_chain, image_index, fluid_simulator,
+                              ui_draw_callback);
 
   vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eVertexInput;
   vk::TimelineSemaphoreSubmitInfo graphics_timeline_info{
-      .waitSemaphoreValueCount = 1,
-      .pWaitSemaphoreValues = &graphics_wait_value,
+      .waitSemaphoreValueCount = simulation_signal_value.has_value() ? 1U : 0U,
+      .pWaitSemaphoreValues =
+          simulation_signal_value.has_value() ? &graphics_wait_value : nullptr,
       .signalSemaphoreValueCount = 1,
       .pSignalSemaphoreValues = &graphics_signal_value};
 
   vk::SubmitInfo graphics_submit_info{
       .pNext = &graphics_timeline_info,
-      .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &*frame_sync.Semaphore(),
-      .pWaitDstStageMask = &wait_stage,
+      .waitSemaphoreCount = simulation_signal_value.has_value() ? 1U : 0U,
+      .pWaitSemaphores =
+          simulation_signal_value.has_value() ? &*frame_sync.Semaphore()
+                                              : nullptr,
+      .pWaitDstStageMask =
+          simulation_signal_value.has_value() ? &wait_stage : nullptr,
       .commandBufferCount = 1,
       .pCommandBuffers = &*graphics_command_buffer_,
       .signalSemaphoreCount = 1,

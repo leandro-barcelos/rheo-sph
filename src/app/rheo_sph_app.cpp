@@ -23,7 +23,7 @@ void app::RheoSPHApp::Init() {
   // Sync objects
   frame_sync_.Init(vulkan_device_);
   // Simulation
-  fluid_simulator_.Init(vulkan_device_, command_pools_);
+  RecreateFluidSimulator();
   // Rendering
   fluid_renderer_.Init(vulkan_device_, vulkan_swap_chain_, command_pools_);
   // UI (no widgets yet)
@@ -45,12 +45,11 @@ void app::RheoSPHApp::MainLoop() {
     }
 
     imgui_layer_.BeginFrame();
-
     uint64_t simulation_signal_value =
-        fluid_simulator_.Run(vulkan_device_, frame_sync_, delta_time_);
+      fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
-                           fluid_simulator_, image_index, window_,
+                           *fluid_simulator_, image_index, window_,
                            simulation_signal_value,
                            [this](vk::raii::CommandBuffer const& command_buffer) {
                              imgui_layer_.Render(command_buffer);
@@ -61,4 +60,13 @@ void app::RheoSPHApp::MainLoop() {
     delta_time_ = (current_time - last_time_) * 1000.0;
     last_time_ = current_time;
   }
+}
+
+void app::RheoSPHApp::RecreateFluidSimulator() {
+  vulkan_device_.Device().waitIdle();
+
+  fluid_simulator_.reset();
+  fluid_simulator_ =
+      std::make_unique<simulation::FluidSimulator>(simulation_parameters_);
+  fluid_simulator_->Init(vulkan_device_, command_pools_);
 }

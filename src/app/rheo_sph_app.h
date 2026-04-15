@@ -1,6 +1,8 @@
 #ifndef RHEOSPH_APP_H
 #define RHEOSPH_APP_H
 
+#include <memory>
+
 #include "../core/command_pool.h"
 #include "../core/frame_sync.h"
 #include "../core/vulkan_context.h"
@@ -19,8 +21,8 @@ constexpr core::WindowProperties kWindowProperties{
 class RheoSPHApp {
  public:
   RheoSPHApp()
-      : window_(kWindowProperties),
-        fluid_simulator_(simulation::FluidSimulator::Parameters{
+            : window_(kWindowProperties),
+                simulation_parameters_(simulation::FluidSimulator::Parameters{
             .voxel_max_particles = 10,
             .fluid_particle_count = 500,
             .rest_density = 1000,
@@ -40,6 +42,7 @@ class RheoSPHApp {
  private:
   void Init();
   void MainLoop();
+    void RecreateFluidSimulator();
 
   core::VulkanContext context_;
   core::Window window_;
@@ -47,7 +50,8 @@ class RheoSPHApp {
   core::VulkanSwapChain vulkan_swap_chain_;
   core::CommandPools command_pools_;
   core::FrameSync frame_sync_;
-  simulation::FluidSimulator fluid_simulator_;
+    simulation::FluidSimulator::Parameters simulation_parameters_;
+    std::unique_ptr<simulation::FluidSimulator> fluid_simulator_;
   renderer::FluidRenderer fluid_renderer_;
   ui::ImGuiLayer imgui_layer_;
   double last_time_ = 0;
