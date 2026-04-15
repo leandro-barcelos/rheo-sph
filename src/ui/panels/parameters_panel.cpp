@@ -130,6 +130,10 @@ ui::ParametersPanel::Values const& ui::ParametersPanel::GetValues() const {
   return values_;
 }
 
+void ui::ParametersPanel::SetValues(Values const& values) {
+  values_ = values;
+}
+
 void ui::ParametersPanel::SetElevationTexturePreview(TextureId texture_id) {
   elevation_texture_preview_ = texture_id;
 }

@@ -8,13 +8,21 @@ namespace ui {
 
 class MenuBarPanel {
  public:
+  struct Events {
+    std::optional<std::string> uploaded_texture_path;
+    std::optional<std::string> save_simulation_path;
+    std::optional<std::string> load_simulation_path;
+  } __attribute__((aligned(128)));
+
   MenuBarPanel();
 
-  [[nodiscard]] std::optional<std::string> Draw();
+  [[nodiscard]] Events Draw();
   void SetElevationTexturePath(std::string const& path);
+  void SetSimulationConfigPath(std::string const& path);
 
  private:
   std::string elevation_texture_path_;
+  std::string simulation_config_path_;
 };
 
 }  // namespace ui

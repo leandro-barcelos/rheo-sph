@@ -1,11 +1,92 @@
 #include "rheo_sph_app.h"
 
+#include <filesystem>
+#include <fstream>
 #include <optional>
+#include <utility>
 
+#include <yaml-cpp/yaml.h>
 #include "backends/imgui_impl_vulkan.h"
 #include "../ui/panels/top_bar_panel.h"
 
 namespace {
+
+std::string EnsureYamlExtension(std::string path) {
+  if (path.empty()) {
+    return path;
+  }
+
+  std::filesystem::path const file_path(path);
+  std::string const extension = file_path.extension().string();
+  if (extension == ".yaml" || extension == ".yml") {
+    return path;
+  }
+
+  return path + ".yaml";
+}
+
+template <typename T>
+std::optional<T> ReadOptionalScalar(YAML::Node const& node, char const* key) {
+  YAML::Node const child = node[key];
+  if (!child || child.IsNull()) {
+    return std::nullopt;
+  }
+  return child.as<T>();
+}
+
+YAML::Node SerializeParametersPanelValues(ui::ParametersPanel::Values const& values) {
+  auto set_optional = [](YAML::Node& node, char const* key, auto const& optional_value) {
+    if (optional_value.has_value()) {
+      node[key] = *optional_value;
+    } else {
+      node[key] = YAML::Node(YAML::NodeType::Null);
+    }
+  };
+
+  YAML::Node parameters;
+
+  set_optional(parameters, "total_fluid_volume", values.total_fluid_volume);
+  set_optional(parameters, "min_elevation", values.min_elevation);
+  set_optional(parameters, "max_elevation", values.max_elevation);
+  set_optional(parameters, "initial_particle_spacing", values.initial_particle_spacing);
+  set_optional(parameters, "voxel_max_particles", values.voxel_max_particles);
+  set_optional(parameters, "viscosity", values.viscosity);
+  set_optional(parameters, "rest_density", values.rest_density);
+  set_optional(parameters, "gas_constant", values.gas_constant);
+  set_optional(parameters, "coefficient_of_restitution", values.coefficient_of_restitution);
+  set_optional(parameters, "friction", values.friction);
+  set_optional(parameters, "yield_stress", values.yield_stress);
+
+  return parameters;
+}
+
+ui::ParametersPanel::Values DeserializeParametersPanelValues(
+    YAML::Node const& parameters_node) {
+  ui::ParametersPanel::Values values{};
+
+  values.total_fluid_volume =
+      ReadOptionalScalar<float>(parameters_node, "total_fluid_volume");
+  values.min_elevation =
+      ReadOptionalScalar<float>(parameters_node, "min_elevation");
+  values.max_elevation =
+      ReadOptionalScalar<float>(parameters_node, "max_elevation");
+  values.initial_particle_spacing =
+      ReadOptionalScalar<float>(parameters_node, "initial_particle_spacing");
+  values.voxel_max_particles =
+      ReadOptionalScalar<uint32_t>(parameters_node, "voxel_max_particles");
+  values.viscosity = ReadOptionalScalar<float>(parameters_node, "viscosity");
+  values.rest_density =
+      ReadOptionalScalar<float>(parameters_node, "rest_density");
+  values.gas_constant =
+      ReadOptionalScalar<float>(parameters_node, "gas_constant");
+  values.coefficient_of_restitution =
+      ReadOptionalScalar<float>(parameters_node, "coefficient_of_restitution");
+  values.friction = ReadOptionalScalar<float>(parameters_node, "friction");
+  values.yield_stress =
+      ReadOptionalScalar<float>(parameters_node, "yield_stress");
+
+  return values;
+}
 
 std::optional<simulation::FluidSimulator::Parameters> BuildSimulationParameters(
     ui::ParametersPanel::Values const& values,
@@ -84,14 +165,29 @@ void app::RheoSPHApp::MainLoop() {
 
     imgui_layer_.BeginFrame();
 
-    std::optional<std::string> const uploaded_texture_path =
-        menu_bar_panel_.Draw();
-    if (uploaded_texture_path.has_value() &&
-        !uploaded_texture_path->empty()) {
-      pending_elevation_texture_path_ = *uploaded_texture_path;
-      menu_bar_panel_.SetElevationTexturePath(*uploaded_texture_path);
-      RecreateElevationTexturePreview(*uploaded_texture_path);
+    ui::MenuBarPanel::Events const menu_events = menu_bar_panel_.Draw();
+    if (menu_events.uploaded_texture_path.has_value() &&
+        !menu_events.uploaded_texture_path->empty()) {
+      pending_elevation_texture_path_ = *menu_events.uploaded_texture_path;
+      menu_bar_panel_.SetElevationTexturePath(*menu_events.uploaded_texture_path);
+      RecreateElevationTexturePreview(*menu_events.uploaded_texture_path);
       parameters_dirty_ = true;
+    }
+
+    if (menu_events.save_simulation_path.has_value() &&
+        !menu_events.save_simulation_path->empty()) {
+      std::string const save_path = EnsureYamlExtension(*menu_events.save_simulation_path);
+      if (SaveSimulationParameters(save_path)) {
+        menu_bar_panel_.SetSimulationConfigPath(save_path);
+      }
+    }
+
+    if (menu_events.load_simulation_path.has_value() &&
+        !menu_events.load_simulation_path->empty()) {
+      std::string const load_path = EnsureYamlExtension(*menu_events.load_simulation_path);
+      if (LoadSimulationParameters(load_path)) {
+        menu_bar_panel_.SetSimulationConfigPath(load_path);
+      }
     }
 
     bool const parameters_changed = parameters_panel_.Draw();
@@ -186,4 +282,62 @@ void app::RheoSPHApp::DestroyElevationTexturePreview() {
   }
 
   elevation_preview_image_ = {};
+}
+
+bool app::RheoSPHApp::SaveSimulationParameters(std::string const& file_path) const {
+  try {
+    std::filesystem::path const output_path(file_path);
+    if (output_path.has_parent_path()) {
+      std::filesystem::create_directories(output_path.parent_path());
+    }
+
+    YAML::Node root;
+    root["version"] = 1;
+    root["elevation_texture_path"] = pending_elevation_texture_path_;
+    root["parameters"] = SerializeParametersPanelValues(parameters_panel_.GetValues());
+
+    std::ofstream output_stream(file_path, std::ios::out | std::ios::trunc);
+    if (!output_stream.is_open()) {
+      return false;
+    }
+
+    output_stream << root;
+    return output_stream.good();
+  } catch (std::exception const&) {
+    return false;
+  }
+}
+
+bool app::RheoSPHApp::LoadSimulationParameters(std::string const& file_path) {
+  try {
+    YAML::Node const root = YAML::LoadFile(file_path);
+    YAML::Node const parameters_node = root["parameters"];
+    if (!parameters_node || !parameters_node.IsMap()) {
+      return false;
+    }
+
+    ui::ParametersPanel::Values values =
+        DeserializeParametersPanelValues(parameters_node);
+
+    std::string const texture_path =
+        root["elevation_texture_path"]
+            ? root["elevation_texture_path"].as<std::string>()
+            : std::string{};
+
+    parameters_panel_.SetValues(values);
+    pending_elevation_texture_path_ = texture_path;
+    menu_bar_panel_.SetElevationTexturePath(texture_path);
+
+    if (!texture_path.empty()) {
+      RecreateElevationTexturePreview(texture_path);
+    } else {
+      DestroyElevationTexturePreview();
+    }
+
+    simulation_running_ = false;
+    parameters_dirty_ = true;
+    return true;
+  } catch (std::exception const&) {
+    return false;
+  }
 }
