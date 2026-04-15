@@ -71,8 +71,7 @@ bool ui::ParametersPanel::Draw() {
   ImGui::SetNextWindowPos(ImVec2(12.0F, 90.0F), ImGuiCond_FirstUseEver);
 
   ImGuiWindowFlags const window_flags =
-  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse |
-  ImGuiWindowFlags_AlwaysAutoResize;
+      ImGuiWindowFlags_NoDocking;
 
   if (ImGui::Begin("Parameters", nullptr, window_flags)) {
     ImGui::TextUnformatted("Elevation texture");

@@ -96,13 +96,7 @@ void ui::ImGuiLayer::Init(core::Window const& window,
     throw std::runtime_error("[ERROR] ImGui: failed to load Font Awesome TTF");
   }
 
-  ImGuiStyle& style = ImGui::GetStyle();
-  style.WindowRounding = 0.0F;
-  style.FrameRounding = 2.0F;
-  style.GrabRounding = 2.0F;
-  style.ScrollbarRounding = 2.0F;
-  style.WindowBorderSize = 1.0F;
-  style.FrameBorderSize = 1.0F;
+  SetupImGuiStyle();
 
   ImGui_ImplGlfw_InitForVulkan(window.Handle(), true);
 
@@ -194,4 +188,96 @@ void ui::ImGuiLayer::CheckVkResult(VkResult result) {
   if (result < 0) {
     throw std::runtime_error("[ERROR] ImGui: Vulkan backend call failed");
   }
+}
+
+void ui::ImGuiLayer::SetupImGuiStyle()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+  auto& colors = style.Colors;
+
+    // --- 1. Sizing and Spacing ---
+    style.WindowPadding = ImVec2(10.0F, 10.0F);
+    style.FramePadding = ImVec2(6.0F, 4.0F);
+    style.ItemSpacing = ImVec2(8.0F, 4.0F);
+    style.ScrollbarSize = 15.0F;
+    style.GrabMinSize = 10.0F;
+
+    // --- 2. Borders & Rounding ---
+    style.WindowRounding = 5.0F;
+    style.FrameRounding = 4.0F;
+    style.PopupRounding = 4.0F;
+    style.ScrollbarRounding = 12.0F;
+    style.GrabRounding = 3.0F;
+    style.TabRounding = 4.0F;
+
+    style.WindowBorderSize = 1.0F;
+    style.FrameBorderSize = 1.0F;
+
+    // --- 3. Color Palette ---
+
+    // Text
+    colors[ImGuiCol_Text] = ImVec4(0.90F, 0.93F, 0.97F, 1.00F);
+    colors[ImGuiCol_TextDisabled] = ImVec4(0.40F, 0.50F, 0.65F, 1.00F);
+
+    // Backgrounds
+    colors[ImGuiCol_WindowBg] = ImVec4(0.07F, 0.09F, 0.12F, 1.00F); // Deep midnight
+    colors[ImGuiCol_ChildBg] = ImVec4(0.09F, 0.12F, 0.16F, 1.00F);
+    colors[ImGuiCol_PopupBg] = ImVec4(0.07F, 0.09F, 0.12F, 0.95F);
+
+    // Borders
+    colors[ImGuiCol_Border] = ImVec4(0.15F, 0.25F, 0.35F, 0.70F);
+    colors[ImGuiCol_BorderShadow] = ImVec4(0.00F, 0.00F, 0.00F, 0.00F);
+
+    // Frames (Inputs, Checkboxes, etc.)
+    colors[ImGuiCol_FrameBg] = ImVec4(0.12F, 0.18F, 0.26F, 1.00F);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18F, 0.28F, 0.40F, 1.00F);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.25F, 0.38F, 0.55F, 1.00F);
+
+    // Title Bars
+    colors[ImGuiCol_TitleBg] = ImVec4(0.09F, 0.12F, 0.18F, 1.00F);
+    colors[ImGuiCol_TitleBgActive] = ImVec4(0.14F, 0.22F, 0.35F, 1.00F);
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.05F, 0.08F, 0.12F, 1.00F);
+
+    // Menus
+    colors[ImGuiCol_MenuBarBg] = ImVec4(0.12F, 0.16F, 0.22F, 1.00F);
+
+    // Scrollbars
+    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.06F, 0.08F, 0.11F, 1.00F);
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.20F, 0.32F, 0.48F, 1.00F);
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.28F, 0.42F, 0.60F, 1.00F);
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.35F, 0.50F, 0.75F, 1.00F);
+
+    // Interactables
+    colors[ImGuiCol_CheckMark] = ImVec4(0.40F, 0.70F, 1.00F, 1.00F);
+    colors[ImGuiCol_SliderGrab] = ImVec4(0.30F, 0.55F, 0.85F, 1.00F);
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.45F, 0.75F, 1.00F, 1.00F);
+    colors[ImGuiCol_Button] = ImVec4(0.18F, 0.35F, 0.55F, 1.00F);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.25F, 0.48F, 0.75F, 1.00F);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.35F, 0.60F, 0.90F, 1.00F);
+    colors[ImGuiCol_Header] = ImVec4(0.18F, 0.35F, 0.55F, 1.00F);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.25F, 0.48F, 0.75F, 1.00F);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.35F, 0.60F, 0.90F, 1.00F);
+
+    // Tabs
+    colors[ImGuiCol_Tab] = ImVec4(0.12F, 0.20F, 0.32F, 1.00F);
+    colors[ImGuiCol_TabHovered] = ImVec4(0.25F, 0.45F, 0.70F, 1.00F);
+    colors[ImGuiCol_TabActive] = ImVec4(0.18F, 0.35F, 0.55F, 1.00F);
+    colors[ImGuiCol_TabUnfocused] = ImVec4(0.08F, 0.12F, 0.18F, 1.00F);
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.12F, 0.20F, 0.32F, 1.00F);
+
+    // Tables
+    colors[ImGuiCol_TableHeaderBg] = ImVec4(0.15F, 0.25F, 0.40F, 1.00F);
+    colors[ImGuiCol_TableBorderStrong] = ImVec4(0.20F, 0.35F, 0.55F, 1.00F);
+    colors[ImGuiCol_TableBorderLight] = ImVec4(0.15F, 0.25F, 0.40F, 1.00F);
+    colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.00F, 1.00F, 1.00F, 0.05F);
+
+    // Misc
+    colors[ImGuiCol_TextSelectedBg] = ImVec4(0.30F, 0.55F, 0.85F, 0.40F);
+    colors[ImGuiCol_DragDropTarget] = ImVec4(0.50F, 0.80F, 1.00F, 0.90F);
+    colors[ImGuiCol_NavHighlight] = ImVec4(0.40F, 0.70F, 1.00F, 1.00F);
+
+#ifdef IMGUI_HAS_DOCK
+    colors[ImGuiCol_DockingPreview] = ImVec4(0.25F, 0.50F, 0.80F, 0.50F);
+    colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.07F, 0.09F, 0.12F, 1.00F);
+#endif
 }

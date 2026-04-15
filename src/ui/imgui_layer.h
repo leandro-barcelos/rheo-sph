@@ -31,6 +31,7 @@ class ImGuiLayer {
 
  private:
   static void CheckVkResult(VkResult result);
+  static void SetupImGuiStyle();
 
   vk::raii::DescriptorPool descriptor_pool_ = nullptr;
   uint32_t min_image_count_ = 0;

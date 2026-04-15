@@ -21,7 +21,7 @@
 namespace app {
 
 constexpr core::WindowProperties kWindowProperties{
-    .width = 800, .height = 600, .title = "Rheo SPH"};
+    .width = 1280, .height = 720, .title = "Rheo SPH"};
 
 class RheoSPHApp {
  public:
