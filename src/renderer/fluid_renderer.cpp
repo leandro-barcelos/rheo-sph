@@ -18,11 +18,14 @@ void renderer::FluidRenderer::Render(
     core::VulkanSwapChain& vulkan_swap_chain, core::FrameSync& frame_sync,
     simulation::FluidSimulator const& fluid_simulator,
     uint32_t image_index, core::Window const& window,
-    uint64_t simulation_signal_value) {
+    uint64_t simulation_signal_value,
+    std::function<void(vk::raii::CommandBuffer const&)> const&
+        ui_draw_callback) {
   uint64_t graphics_wait_value = simulation_signal_value;
   uint64_t graphics_signal_value = frame_sync.GetNextTimelineValue();
 
-  RecordGraphicsCommandBuffer(vulkan_swap_chain, image_index, fluid_simulator);
+    RecordGraphicsCommandBuffer(vulkan_swap_chain, image_index, fluid_simulator,
+                                                            ui_draw_callback);
 
   vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eVertexInput;
   vk::TimelineSemaphoreSubmitInfo graphics_timeline_info{
@@ -119,7 +122,9 @@ void renderer::FluidRenderer::CreateGraphicsCommandBuffer(
 
 void renderer::FluidRenderer::RecordGraphicsCommandBuffer(
     core::VulkanSwapChain& vulkan_swap_chain, uint32_t image_index,
-    simulation::FluidSimulator const& fluid_simulator) {
+    simulation::FluidSimulator const& fluid_simulator,
+    std::function<void(vk::raii::CommandBuffer const&)> const&
+        ui_draw_callback) {
   auto& command_buffer = graphics_command_buffer_;
   command_buffer.reset();
   command_buffer.begin({});
@@ -159,6 +164,11 @@ void renderer::FluidRenderer::RecordGraphicsCommandBuffer(
   command_buffer.bindVertexBuffers(
       0, {fluid_simulator.FluidParticlesReadBuffer().buffer}, {0});
   command_buffer.draw(fluid_simulator.FluidParticleCount(), 1, 0, 0);
+
+    if (ui_draw_callback) {
+        ui_draw_callback(command_buffer);
+    }
+
   command_buffer.endRendering();
 
   TransitionImageLayout(vulkan_swap_chain, image_index,

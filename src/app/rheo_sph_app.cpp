@@ -3,6 +3,7 @@
 void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
+  imgui_layer_.Shutdown();
 }
 
 void app::RheoSPHApp::Init() {
@@ -25,6 +26,8 @@ void app::RheoSPHApp::Init() {
   fluid_simulator_.Init(vulkan_device_, command_pools_);
   // Rendering
   fluid_renderer_.Init(vulkan_device_, vulkan_swap_chain_, command_pools_);
+  // UI (no widgets yet)
+  imgui_layer_.Init(window_, context_, vulkan_device_, vulkan_swap_chain_);
 }
 
 void app::RheoSPHApp::MainLoop() {
@@ -37,15 +40,22 @@ void app::RheoSPHApp::MainLoop() {
 
     if (image_index == core::VulkanSwapChain::kInvalidImageIndex) {
       vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
+      imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain_);
       continue;
     }
+
+    imgui_layer_.BeginFrame();
 
     uint64_t simulation_signal_value =
         fluid_simulator_.Run(vulkan_device_, frame_sync_, delta_time_);
 
     fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
                            fluid_simulator_, image_index, window_,
-                           simulation_signal_value);
+                           simulation_signal_value,
+                           [this](vk::raii::CommandBuffer const& command_buffer) {
+                             imgui_layer_.Render(command_buffer);
+                           });
+    imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain_);
 
     double current_time = glfwGetTime();
     delta_time_ = (current_time - last_time_) * 1000.0;

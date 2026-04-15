@@ -85,6 +85,8 @@ target_sources(
         src/resources/memory.h
         src/simulation/fluid_simulator.cpp
         src/simulation/fluid_simulator.h
+        src/ui/imgui_layer.cpp
+        src/ui/imgui_layer.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)

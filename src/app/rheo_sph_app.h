@@ -9,6 +9,7 @@
 #include "../core/window.h"
 #include "../renderer/fluid_renderer.h"
 #include "../simulation/fluid_simulator.h"
+#include "../ui/imgui_layer.h"
 
 namespace app {
 
@@ -48,6 +49,7 @@ class RheoSPHApp {
   core::FrameSync frame_sync_;
   simulation::FluidSimulator fluid_simulator_;
   renderer::FluidRenderer fluid_renderer_;
+  ui::ImGuiLayer imgui_layer_;
   double last_time_ = 0;
   double delta_time_ = 0;
 };
