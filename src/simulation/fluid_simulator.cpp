@@ -31,20 +31,19 @@ simulation::FluidSimulator::FluidParticle::GetAttributeDescriptions() {
 simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
     : uniform_buffer_data_{},
       elevation_texture_filename_(parameters.elevation_texture_filename) {
-  const uint32_t requested_fluid_particle_count =
-      parameters.fluid_particle_count;
-
-  uint32_t grid_resolution = 2;
-  if (requested_fluid_particle_count > 0) {
-    grid_resolution =
-        static_cast<uint32_t>(std::ceil(
-            std::cbrt(static_cast<double>(requested_fluid_particle_count)))) +
-        2;
-  }
+  const float requested_spacing = parameters.initial_particle_spacing;
+    const float spacing =
+            requested_spacing > 0.0F ? requested_spacing : (1.0F / 9.0F);
+  const uint32_t grid_resolution =
+      std::max(3U, static_cast<uint32_t>(std::floor(1.0F / spacing)) + 1U);
+  const float step = 1.0F / static_cast<float>(grid_resolution - 1);
 
   const auto grid_resolution_size = static_cast<std::size_t>(grid_resolution);
   const auto interior_resolution_size =
       static_cast<std::size_t>(grid_resolution - 2);
+  const std::size_t fluid_particle_count =
+      interior_resolution_size * interior_resolution_size *
+      interior_resolution_size;
   const std::size_t total_grid_particles =
       (grid_resolution_size * grid_resolution_size * grid_resolution_size);
   const std::size_t interior_grid_particles =
@@ -52,13 +51,9 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
        interior_resolution_size);
   const std::size_t max_wall_count =
       total_grid_particles - interior_grid_particles;
-  fluid_particles_.reserve(requested_fluid_particle_count);
+  fluid_particles_.reserve(fluid_particle_count);
   wall_particles_.reserve(max_wall_count);
 
-    const float fallback_step = 1.0F / static_cast<float>(grid_resolution - 1);
-    const float step = parameters.initial_particle_spacing > 0.0F
-                                                 ? parameters.initial_particle_spacing
-                                                 : fallback_step;
   for (uint32_t z_index = 0; z_index < grid_resolution; ++z_index) {
     for (uint32_t y_index = 0; y_index < grid_resolution; ++y_index) {
       for (uint32_t x_index = 0; x_index < grid_resolution; ++x_index) {
@@ -73,14 +68,12 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
           continue;
         }
 
-        if (fluid_particles_.size() < requested_fluid_particle_count) {
-          fluid_particles_.emplace_back(
-              FluidParticle{.position = position,
-                            .velocity = {0.0F, 0.0F, 0.0F, 0.0F},
-                            .distance_traveled = {0.0F, 0.0F, 0.0F, 0.0F},
-                            .color = {0.2F, 0.6F, 1.0F, 1.0F},
-                            .density = 0.0F});
-        }
+            fluid_particles_.emplace_back(
+                FluidParticle{.position = position,
+                      .velocity = {0.0F, 0.0F, 0.0F, 0.0F},
+                      .distance_traveled = {0.0F, 0.0F, 0.0F, 0.0F},
+                      .color = {0.2F, 0.6F, 1.0F, 1.0F},
+                      .density = 0.0F});
       }
     }
   }
@@ -117,11 +110,11 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
       .min_elevation = parameters.min_elevation,
       .max_elevation = parameters.max_elevation,
       .mu = parameters.friction,
-    .yield_stress = parameters.yield_stress,
-    .padding0 = {0U, 0U, 0U},
-    .bucket_size = bucket_size,
-    .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
-    .max_bound = max_bound};
+      .yield_stress = parameters.yield_stress,
+      .padding0 = {0U, 0U, 0U},
+      .bucket_size = bucket_size,
+      .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
+      .max_bound = max_bound};
 
   bucket_.resize(
       static_cast<std::size_t>(uniform_buffer_data_.bucket_size[0]) *

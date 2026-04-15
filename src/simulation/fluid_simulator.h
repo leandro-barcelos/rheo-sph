@@ -24,7 +24,6 @@ class FluidSimulator {
  public:
   struct Parameters {
     uint32_t voxel_max_particles;
-    uint32_t fluid_particle_count;
     float rest_density;
     float total_fluid_volume;
     float viscosity;

@@ -26,7 +26,6 @@ class RheoSPHApp {
       : window_(kWindowProperties),
         simulation_parameters_(simulation::FluidSimulator::Parameters{
             .voxel_max_particles = 10,
-            .fluid_particle_count = 500,
             .rest_density = 1000,
             .total_fluid_volume = 11700000,
             .viscosity = 741,
