@@ -12,6 +12,7 @@
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
 #include "../renderer/fluid_renderer.h"
+#include "../resources/images.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/imgui_layer.h"
 #include "../ui/panels/menu_bar_panel.h"
@@ -31,6 +32,8 @@ class RheoSPHApp {
   void Init();
   void MainLoop();
   void RecreateFluidSimulator();
+  void RecreateElevationTexturePreview(std::string const& texture_path);
+  void DestroyElevationTexturePreview();
 
   core::VulkanContext context_;
   core::Window window_;
@@ -44,6 +47,8 @@ class RheoSPHApp {
   ui::ImGuiLayer imgui_layer_;
   ui::MenuBarPanel menu_bar_panel_;
     ui::ParametersPanel parameters_panel_;
+  resources::AllocatedImage elevation_preview_image_;
+  ui::ParametersPanel::TextureId elevation_preview_texture_id_ = nullptr;
   bool simulation_running_ = false;
     bool parameters_dirty_ = true;
   std::string pending_elevation_texture_path_;

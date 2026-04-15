@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "backends/imgui_impl_vulkan.h"
 #include "../ui/panels/top_bar_panel.h"
 
 namespace {
@@ -41,6 +42,7 @@ std::optional<simulation::FluidSimulator::Parameters> BuildSimulationParameters(
 void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
+  DestroyElevationTexturePreview();
   imgui_layer_.Shutdown();
 }
 
@@ -88,6 +90,7 @@ void app::RheoSPHApp::MainLoop() {
         !uploaded_texture_path->empty()) {
       pending_elevation_texture_path_ = *uploaded_texture_path;
       menu_bar_panel_.SetElevationTexturePath(*uploaded_texture_path);
+      RecreateElevationTexturePreview(*uploaded_texture_path);
       parameters_dirty_ = true;
     }
 
@@ -156,4 +159,31 @@ void app::RheoSPHApp::RecreateFluidSimulator() {
   fluid_simulator_ =
       std::make_unique<simulation::FluidSimulator>(*simulation_parameters_);
   fluid_simulator_->Init(vulkan_device_, command_pools_);
+}
+
+void app::RheoSPHApp::RecreateElevationTexturePreview(
+    std::string const& texture_path) {
+  DestroyElevationTexturePreview();
+
+  elevation_preview_image_ = resources::ImageAllocator::CreateImage(
+      vulkan_device_, command_pools_, texture_path);
+
+  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
+      *elevation_preview_image_.sampler, *elevation_preview_image_.image_view,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  elevation_preview_texture_id_ =
+      reinterpret_cast<ui::ParametersPanel::TextureId>(descriptor_set);
+  parameters_panel_.SetElevationTexturePreview(elevation_preview_texture_id_);
+}
+
+void app::RheoSPHApp::DestroyElevationTexturePreview() {
+  if (elevation_preview_texture_id_ != nullptr) {
+    ImGui_ImplVulkan_RemoveTexture(
+        reinterpret_cast<VkDescriptorSet>(elevation_preview_texture_id_));
+    elevation_preview_texture_id_ = nullptr;
+    parameters_panel_.SetElevationTexturePreview(nullptr);
+  }
+
+  elevation_preview_image_ = {};
 }

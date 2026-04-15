@@ -8,6 +8,8 @@ namespace ui {
 
 class ParametersPanel {
  public:
+  using TextureId = void*;
+
   struct Values {
     std::optional<float> total_fluid_volume;
     std::optional<float> min_elevation;
@@ -27,6 +29,7 @@ class ParametersPanel {
   [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
   [[nodiscard]] Values const& GetValues() const;
+  void SetElevationTexturePreview(TextureId texture_id);
 
  private:
   static bool DrawOptionalInputFloat(char const* label,
@@ -40,6 +43,7 @@ class ParametersPanel {
                                      uint32_t min_value, uint32_t max_value);
 
   Values values_{};
+  TextureId elevation_texture_preview_ = nullptr;
 };
 
 }  // namespace ui

@@ -75,6 +75,15 @@ bool ui::ParametersPanel::Draw() {
   ImGuiWindowFlags_AlwaysAutoResize;
 
   if (ImGui::Begin("Parameters", nullptr, window_flags)) {
+    ImGui::TextUnformatted("Elevation texture");
+    if (elevation_texture_preview_ != nullptr) {
+      ImGui::Image(elevation_texture_preview_, ImVec2(256.0F, 256.0F));
+    } else {
+      ImGui::TextDisabled("No texture loaded");
+    }
+
+    ImGui::Separator();
+
     changed |= DrawOptionalInputFloat("Total fluid volume",
                                       values_.total_fluid_volume, 1000.0F);
     changed |= DrawOptionalInputFloat("Minimum elevation", values_.min_elevation,
@@ -120,4 +129,8 @@ bool ui::ParametersPanel::AreAllRequiredDefined() const {
 
 ui::ParametersPanel::Values const& ui::ParametersPanel::GetValues() const {
   return values_;
+}
+
+void ui::ParametersPanel::SetElevationTexturePreview(TextureId texture_id) {
+  elevation_texture_preview_ = texture_id;
 }
