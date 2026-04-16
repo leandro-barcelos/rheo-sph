@@ -26,6 +26,11 @@ class ImGuiLayer {
   void BeginFrame() const;
   void EndFrame() const;
   void Render(vk::raii::CommandBuffer const& command_buffer) const;
+
+  [[nodiscard]] void* AddTexture(vk::Sampler sampler, vk::ImageView image_view,
+                                 vk::ImageLayout image_layout) const;
+  void RemoveTexture(void* texture_id) const;
+
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
   void Shutdown();
 

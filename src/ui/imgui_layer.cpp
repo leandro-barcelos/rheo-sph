@@ -156,6 +156,27 @@ void ui::ImGuiLayer::Render(vk::raii::CommandBuffer const& command_buffer) const
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *command_buffer);
 }
 
+void* ui::ImGuiLayer::AddTexture(vk::Sampler sampler, vk::ImageView image_view,
+                                 vk::ImageLayout image_layout) const {
+  if (!initialized_) {
+    return nullptr;
+  }
+
+  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
+      static_cast<VkSampler>(sampler), static_cast<VkImageView>(image_view),
+      static_cast<VkImageLayout>(image_layout));
+
+  return reinterpret_cast<void*>(descriptor_set);
+}
+
+void ui::ImGuiLayer::RemoveTexture(void* texture_id) const {
+  if (!initialized_ || texture_id == nullptr) {
+    return;
+  }
+
+  ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(texture_id));
+}
+
 void ui::ImGuiLayer::OnSwapChainRecreated(
     core::VulkanSwapChain const& vulkan_swap_chain) {
   if (!initialized_) {

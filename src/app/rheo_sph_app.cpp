@@ -6,7 +6,6 @@
 #include <utility>
 
 #include <yaml-cpp/yaml.h>
-#include "backends/imgui_impl_vulkan.h"
 #include "../ui/panels/top_bar_panel.h"
 
 namespace {
@@ -124,7 +123,7 @@ void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
   DestroyElevationTexturePreview();
-  imgui_layer_.Shutdown();
+  renderer_.Shutdown();
 }
 
 void app::RheoSPHApp::Init() {
@@ -144,9 +143,8 @@ void app::RheoSPHApp::Init() {
   // Sync objects
   frame_sync_.Init(vulkan_device_);
   // Rendering
-  fluid_renderer_.Init(vulkan_device_, vulkan_swap_chain_, command_pools_);
-  // UI
-  imgui_layer_.Init(window_, context_, vulkan_device_, vulkan_swap_chain_);
+  renderer_.Init(window_, context_, vulkan_device_, vulkan_swap_chain_,
+                 command_pools_);
 }
 
 void app::RheoSPHApp::MainLoop() {
@@ -159,11 +157,11 @@ void app::RheoSPHApp::MainLoop() {
 
     if (image_index == core::VulkanSwapChain::kInvalidImageIndex) {
       vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
-      imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain_);
+      renderer_.OnSwapChainRecreated(vulkan_swap_chain_);
       continue;
     }
 
-    imgui_layer_.BeginFrame();
+    renderer_.BeginUiFrame();
 
     ui::MenuBarPanel::Events const menu_events = menu_bar_panel_.Draw();
     if (menu_events.uploaded_texture_path.has_value() &&
@@ -222,7 +220,7 @@ void app::RheoSPHApp::MainLoop() {
       }
     }
 
-    imgui_layer_.EndFrame();
+    renderer_.EndUiFrame();
 
     std::optional<uint64_t> simulation_signal_value;
     if (simulation_running_ && fluid_simulator_) {
@@ -230,13 +228,9 @@ void app::RheoSPHApp::MainLoop() {
           fluid_simulator_->Run(vulkan_device_, frame_sync_, delta_time_);
     }
 
-    fluid_renderer_.Render(vulkan_device_, vulkan_swap_chain_, frame_sync_,
-                           fluid_simulator_.get(), image_index, window_,
-                           simulation_signal_value,
-                           [this](vk::raii::CommandBuffer const& command_buffer) {
-                             imgui_layer_.Render(command_buffer);
-                           });
-    imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain_);
+    renderer_.RenderFrame(vulkan_device_, vulkan_swap_chain_, frame_sync_,
+                          fluid_simulator_.get(), image_index, window_,
+                          simulation_signal_value);
 
     double current_time = glfwGetTime();
     delta_time_ = (current_time - last_time_) * 1000.0;
@@ -264,19 +258,16 @@ void app::RheoSPHApp::RecreateElevationTexturePreview(
   elevation_preview_image_ = resources::ImageAllocator::CreateImage(
       vulkan_device_, command_pools_, texture_path);
 
-  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
-      *elevation_preview_image_.sampler, *elevation_preview_image_.image_view,
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-  elevation_preview_texture_id_ =
-      reinterpret_cast<ui::ParametersPanel::TextureId>(descriptor_set);
+  elevation_preview_texture_id_ = reinterpret_cast<ui::ParametersPanel::TextureId>(
+      renderer_.AddUiTexture(*elevation_preview_image_.sampler,
+                             *elevation_preview_image_.image_view,
+                             vk::ImageLayout::eShaderReadOnlyOptimal));
   parameters_panel_.SetElevationTexturePreview(elevation_preview_texture_id_);
 }
 
 void app::RheoSPHApp::DestroyElevationTexturePreview() {
   if (elevation_preview_texture_id_ != nullptr) {
-    ImGui_ImplVulkan_RemoveTexture(
-        reinterpret_cast<VkDescriptorSet>(elevation_preview_texture_id_));
+    renderer_.RemoveUiTexture(elevation_preview_texture_id_);
     elevation_preview_texture_id_ = nullptr;
     parameters_panel_.SetElevationTexturePreview(nullptr);
   }

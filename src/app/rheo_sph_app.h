@@ -11,10 +11,9 @@
 #include "../core/vulkan_device.h"
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
-#include "../renderer/fluid_renderer.h"
+#include "../renderer/renderer.h"
 #include "../resources/images.h"
 #include "../simulation/fluid_simulator.h"
-#include "../ui/imgui_layer.h"
 #include "../ui/panels/menu_bar_panel.h"
 #include "../ui/panels/parameters_panel.h"
 
@@ -45,8 +44,7 @@ class RheoSPHApp {
   core::FrameSync frame_sync_;
     std::optional<simulation::FluidSimulator::Parameters> simulation_parameters_;
   std::unique_ptr<simulation::FluidSimulator> fluid_simulator_;
-  renderer::FluidRenderer fluid_renderer_;
-  ui::ImGuiLayer imgui_layer_;
+  renderer::Renderer renderer_;
   ui::MenuBarPanel menu_bar_panel_;
     ui::ParametersPanel parameters_panel_;
   resources::AllocatedImage elevation_preview_image_;

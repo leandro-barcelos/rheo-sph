@@ -82,6 +82,8 @@ target_sources(
         src/core/window.h
         src/renderer/fluid_renderer.cpp
         src/renderer/fluid_renderer.h
+        src/renderer/renderer.cpp
+        src/renderer/renderer.h
         src/resources/buffer.cpp
         src/resources/buffer.h
         src/resources/descriptor.cpp
