@@ -1,5 +1,7 @@
 #include "renderer.h"
 
+#include <utility>
+
 namespace renderer {
 
 void Renderer::Init(core::Window const& window,
@@ -117,17 +119,58 @@ void Renderer::OnSwapChainRecreated(
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
 }
 
-void* Renderer::AddUiTexture(vk::Sampler sampler, vk::ImageView image_view,
-                             vk::ImageLayout image_layout) const {
+UiTextureHandle Renderer::AddUiTexture(vk::Sampler sampler,
+                                      vk::ImageView image_view,
+                                      vk::ImageLayout image_layout) {
   return imgui_layer_.AddTexture(sampler, image_view, image_layout);
 }
 
-void Renderer::RemoveUiTexture(void* texture_id) const {
-  imgui_layer_.RemoveTexture(texture_id);
+void Renderer::RemoveUiTexture(UiTextureHandle handle) {
+  if (!handle.IsValid()) {
+    return;
+  }
+
+  imgui_layer_.RemoveTexture(handle);
+}
+
+UiTextureHandle Renderer::LoadUiTexture(std::string const& path,
+                                       core::VulkanDevice const& vulkan_device,
+                                       core::CommandPools const& command_pools) {
+  resources::AllocatedImage image =
+      resources::ImageAllocator::CreateImage(vulkan_device, command_pools, path);
+
+  UiTextureHandle const handle = AddUiTexture(
+      *image.sampler, *image.image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
+  if (!handle.IsValid()) {
+    return kNullUiTexture;
+  }
+
+  ui_textures_.emplace(handle.id, std::move(image));
+  return handle;
+}
+
+void Renderer::UnloadUiTexture(UiTextureHandle handle) {
+  if (!handle.IsValid()) {
+    return;
+  }
+
+  auto iter = ui_textures_.find(handle.id);
+  if (iter == ui_textures_.end()) {
+    RemoveUiTexture(handle);
+    return;
+  }
+
+  RemoveUiTexture(handle);
+  ui_textures_.erase(iter);
+}
+
+void* Renderer::ResolveImGuiTextureId(UiTextureHandle handle) const {
+  return imgui_layer_.ResolveImGuiTextureId(handle);
 }
 
 void Renderer::Shutdown() {
   imgui_layer_.Shutdown();
+  ui_textures_.clear();
 }
 
 void Renderer::CreateGraphicsCommandBuffer(

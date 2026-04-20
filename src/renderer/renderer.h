@@ -1,6 +1,8 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <string>
+#include <unordered_map>
 #include <optional>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -12,7 +14,9 @@
 #include "../core/window.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/imgui_layer.h"
+#include "../resources/images.h"
 #include "fluid_renderer.h"
+#include "ui_texture_handle.h"
 
 namespace renderer {
 
@@ -31,10 +35,19 @@ class Renderer {
                    uint32_t image_index, core::Window const& window,
                    std::optional<uint64_t> simulation_signal_value);
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
-  [[nodiscard]] void* AddUiTexture(vk::Sampler sampler,
-                                   vk::ImageView image_view,
-                                   vk::ImageLayout image_layout) const;
-  void RemoveUiTexture(void* texture_id) const;
+
+    [[nodiscard]] UiTextureHandle AddUiTexture(vk::Sampler sampler,
+                                                                                        vk::ImageView image_view,
+                                                                                        vk::ImageLayout image_layout);
+    void RemoveUiTexture(UiTextureHandle handle);
+
+    [[nodiscard]] UiTextureHandle LoadUiTexture(
+            std::string const& path, core::VulkanDevice const& vulkan_device,
+            core::CommandPools const& command_pools);
+    void UnloadUiTexture(UiTextureHandle handle);
+
+    [[nodiscard]] void* ResolveImGuiTextureId(UiTextureHandle handle) const;
+
   void Shutdown();
 
  private:
@@ -42,6 +55,7 @@ class Renderer {
   vk::raii::CommandBuffer graphics_command_buffer_ = nullptr;
   FluidRenderer fluid_renderer_;
   ui::ImGuiLayer imgui_layer_;
+    std::unordered_map<uint32_t, resources::AllocatedImage> ui_textures_;
 
   void CreateGraphicsCommandBuffer(core::VulkanDevice const& vulkan_device,
                                    core::CommandPools const& command_pools);

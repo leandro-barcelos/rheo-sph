@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <cstddef>
 
 #include "imgui.h"
 
@@ -75,8 +76,10 @@ bool ui::ParametersPanel::Draw() {
 
   if (ImGui::Begin("Parameters", nullptr, window_flags)) {
     ImGui::TextUnformatted("Elevation texture");
-    if (elevation_texture_preview_ != nullptr) {
-      ImGui::Image(elevation_texture_preview_, ImVec2(256.0F, 256.0F));
+    if (imgui_texture_id_ != nullptr) {
+      auto const tex_id =
+          static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(imgui_texture_id_));
+      ImGui::Image(ImTextureRef(tex_id), ImVec2(256.0F, 256.0F));
     } else {
       ImGui::TextDisabled("No texture loaded");
     }
@@ -134,6 +137,8 @@ void ui::ParametersPanel::SetValues(Values const& values) {
   values_ = values;
 }
 
-void ui::ParametersPanel::SetElevationTexturePreview(TextureId texture_id) {
-  elevation_texture_preview_ = texture_id;
+void ui::ParametersPanel::SetElevationTexturePreview(TextureId handle,
+                                                     void* imgui_id) {
+  elevation_texture_preview_ = handle;
+  imgui_texture_id_ = imgui_id;
 }

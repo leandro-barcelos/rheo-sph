@@ -64,6 +64,10 @@ target_sources(
     ${PROJECT_NAME}
     PRIVATE
         src/main.cpp
+        src/app/simulation_session.cpp
+        src/app/simulation_session.h
+        src/app/ui_controller.cpp
+        src/app/ui_controller.h
         src/app/rheo_sph_app.cpp
         src/app/rheo_sph_app.h
         src/core/command_pool.cpp
@@ -84,6 +88,9 @@ target_sources(
         src/renderer/fluid_renderer.h
         src/renderer/renderer.cpp
         src/renderer/renderer.h
+        src/renderer/ui_texture_handle.h
+        src/renderer/ui_texture_registry.cpp
+        src/renderer/ui_texture_registry.h
         src/resources/buffer.cpp
         src/resources/buffer.h
         src/resources/descriptor.cpp

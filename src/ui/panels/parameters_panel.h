@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <optional>
 
+#include "../../renderer/ui_texture_handle.h"
+
 namespace ui {
 
 class ParametersPanel {
  public:
-  using TextureId = void*;
+  using TextureId = renderer::UiTextureHandle;
 
   struct Values {
     std::optional<float> total_fluid_volume;
@@ -30,7 +32,7 @@ class ParametersPanel {
   [[nodiscard]] bool AreAllRequiredDefined() const;
   [[nodiscard]] Values const& GetValues() const;
   void SetValues(Values const& values);
-  void SetElevationTexturePreview(TextureId texture_id);
+  void SetElevationTexturePreview(TextureId handle, void* imgui_id);
 
  private:
   static bool DrawOptionalInputFloat(char const* label,
@@ -44,7 +46,8 @@ class ParametersPanel {
                                      uint32_t min_value, uint32_t max_value);
 
   Values values_{};
-  TextureId elevation_texture_preview_ = nullptr;
+  TextureId elevation_texture_preview_ = renderer::kNullUiTexture;
+  void* imgui_texture_id_ = nullptr;
 };
 
 }  // namespace ui

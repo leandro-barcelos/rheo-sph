@@ -1,0 +1,54 @@
+#ifndef UI_CONTROLLER_H
+#define UI_CONTROLLER_H
+
+#include <cstdint>
+#include <optional>
+#include <string>
+
+#include "../renderer/ui_texture_handle.h"
+#include "../simulation/fluid_simulator.h"
+#include "../ui/panels/menu_bar_panel.h"
+#include "../ui/panels/parameters_panel.h"
+
+// X11 headers (pulled in by GLFW on Linux) may define `None` as a macro.
+// Undefine it so we can use `SimAction::None` safely.
+#ifdef None
+#undef None
+#endif
+
+namespace app {
+
+// NOLINTNEXTLINE(altera-struct-pack-align) - packing is not desirable here.
+struct UiIntent {
+  enum class SimAction : std::uint8_t { kNone, kPlay, kPause, kReset };
+
+  std::optional<simulation::FluidSimulator::Parameters> built_parameters;
+  std::optional<std::string> new_texture_path;
+  std::optional<std::string> save_path;
+  std::optional<std::string> load_path;
+  SimAction sim_action = SimAction::kNone;
+  bool parameters_changed = false;
+};
+
+class UiController {
+ public:
+  [[nodiscard]] UiIntent Draw(bool simulation_running);
+
+  [[nodiscard]] bool SaveSimulationConfig(std::string const& path);
+  [[nodiscard]] bool LoadSimulationConfig(std::string const& path);
+  [[nodiscard]] std::optional<simulation::FluidSimulator::Parameters> BuildParameters() const;
+  [[nodiscard]] std::string const& GetElevationTexturePath() const;
+
+  void NotifyTextureLoaded(renderer::UiTextureHandle handle, void* imgui_id);
+  void ClearTexturePreview();
+  [[nodiscard]] ui::ParametersPanel::Values const& GetParameterValues() const;
+
+ private:
+  ui::ParametersPanel parameters_panel_;
+  std::string pending_elevation_texture_path_;
+  ui::MenuBarPanel menu_bar_panel_;
+};
+
+}  // namespace app
+
+#endif  // UI_CONTROLLER_H

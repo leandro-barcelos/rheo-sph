@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 
 #include "IconsFontAwesome6.h"
@@ -153,28 +155,66 @@ void ui::ImGuiLayer::Render(vk::raii::CommandBuffer const& command_buffer) const
     return;
   }
 
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *command_buffer);
+  ImDrawData* draw_data = ImGui::GetDrawData();
+  if (draw_data != nullptr) {
+    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+      ImDrawList* cmd_list = draw_data->CmdLists[list_index];
+      if (cmd_list == nullptr) {
+        continue;
+      }
+
+      for (ImDrawCmd& cmd : cmd_list->CmdBuffer) {
+        if (cmd.TexRef._TexData != nullptr) {
+          continue;
+        }
+
+        ImTextureID const tex_id = cmd.TexRef._TexID;
+        if (tex_id == ImTextureID_Invalid) {
+          continue;
+        }
+
+        auto const raw_id = static_cast<std::uintptr_t>(tex_id);
+        if (raw_id > std::numeric_limits<uint32_t>::max()) {
+          continue;
+        }
+
+        renderer::UiTextureHandle const handle{.id = static_cast<uint32_t>(raw_id)};
+        void* const resolved = registry_.ResolveImGuiId(handle);
+        if (resolved != nullptr) {
+          cmd.TexRef = ImTextureRef(resolved);
+        }
+      }
+    }
+  }
+
+  ImGui_ImplVulkan_RenderDrawData(draw_data, *command_buffer);
 }
 
-void* ui::ImGuiLayer::AddTexture(vk::Sampler sampler, vk::ImageView image_view,
-                                 vk::ImageLayout image_layout) const {
+renderer::UiTextureHandle ui::ImGuiLayer::AddTexture(vk::Sampler sampler,
+                                                     vk::ImageView image_view,
+                                                     vk::ImageLayout image_layout) {
+  if (!initialized_) {
+    return renderer::kNullUiTexture;
+  }
+
+  return registry_.Add(sampler, image_view, image_layout);
+}
+
+void ui::ImGuiLayer::RemoveTexture(renderer::UiTextureHandle handle) {
+  if (!initialized_) {
+    return;
+  }
+
+  registry_.Remove(handle);
+}
+
+void* ui::ImGuiLayer::ResolveImGuiTextureId(
+    renderer::UiTextureHandle handle) const {
   if (!initialized_) {
     return nullptr;
   }
 
-  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
-      static_cast<VkSampler>(sampler), static_cast<VkImageView>(image_view),
-      static_cast<VkImageLayout>(image_layout));
-
-  return reinterpret_cast<void*>(descriptor_set);
-}
-
-void ui::ImGuiLayer::RemoveTexture(void* texture_id) const {
-  if (!initialized_ || texture_id == nullptr) {
-    return;
-  }
-
-  ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(texture_id));
+  return registry_.ResolveImGuiId(handle);
 }
 
 void ui::ImGuiLayer::OnSwapChainRecreated(
@@ -196,6 +236,7 @@ void ui::ImGuiLayer::Shutdown() {
     return;
   }
 
+  registry_.Clear();
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();

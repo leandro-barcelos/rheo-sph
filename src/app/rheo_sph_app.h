@@ -2,7 +2,6 @@
 #define RHEOSPH_APP_H
 
 #include <memory>
-#include <optional>
 #include <string>
 
 #include "../core/command_pool.h"
@@ -12,10 +11,8 @@
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
 #include "../renderer/renderer.h"
-#include "../resources/images.h"
-#include "../simulation/fluid_simulator.h"
-#include "../ui/panels/menu_bar_panel.h"
-#include "../ui/panels/parameters_panel.h"
+#include "simulation_session.h"
+#include "ui_controller.h"
 
 namespace app {
 
@@ -24,17 +21,14 @@ constexpr core::WindowProperties kWindowProperties{
 
 class RheoSPHApp {
  public:
-    RheoSPHApp() : window_(kWindowProperties) {}
+  RheoSPHApp() : window_(kWindowProperties) {}
   void Run();
 
  private:
   void Init();
   void MainLoop();
-  void RecreateFluidSimulator();
-  void RecreateElevationTexturePreview(std::string const& texture_path);
-  void DestroyElevationTexturePreview();
-  [[nodiscard]] bool SaveSimulationParameters(std::string const& file_path) const;
-  [[nodiscard]] bool LoadSimulationParameters(std::string const& file_path);
+  void ProcessIntent(UiIntent const& intent);
+  void UpdateDeltaTime();
 
   core::VulkanContext context_;
   core::Window window_;
@@ -42,16 +36,10 @@ class RheoSPHApp {
   core::VulkanSwapChain vulkan_swap_chain_;
   core::CommandPools command_pools_;
   core::FrameSync frame_sync_;
-    std::optional<simulation::FluidSimulator::Parameters> simulation_parameters_;
-  std::unique_ptr<simulation::FluidSimulator> fluid_simulator_;
   renderer::Renderer renderer_;
-  ui::MenuBarPanel menu_bar_panel_;
-    ui::ParametersPanel parameters_panel_;
-  resources::AllocatedImage elevation_preview_image_;
-  ui::ParametersPanel::TextureId elevation_preview_texture_id_ = nullptr;
-  bool simulation_running_ = false;
-    bool parameters_dirty_ = true;
-  std::string pending_elevation_texture_path_;
+  SimulationSession session_;
+  UiController ui_controller_;
+  renderer::UiTextureHandle elevation_preview_texture_{};
   double last_time_ = 0;
   double delta_time_ = 0;
 };
