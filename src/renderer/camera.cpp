@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numbers>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <numbers>
 #include <variant>
 
 #include "rheo-sph/src/core/input_events.h"
@@ -26,9 +26,7 @@ void renderer::Camera::ProcessInput(core::WindowSize const& window_size,
       if (events.is_holding_mouse_left_click) {
         // Zoom = Ctrl + Left click + Move cursor
         if (events.is_holding_control) {
-          float zoom = std::sqrt((move_vector[0] * move_vector[0]) +
-                                 (move_vector[1] * move_vector[1]));
-          // ProcessZoom(zoom);
+          ProcessZoom(-move_vector[1] * 120.0F);
         } else if (events.is_holding_shift) {
         } else {
           // Pan = Left click + Move cursor
@@ -40,7 +38,7 @@ void renderer::Camera::ProcessInput(core::WindowSize const& window_size,
 
       // Zoom = Ctrl + Scroll
       if (events.is_holding_control) {
-        // ProcessZoom(static_cast<float>(scroll_event.dy));
+        ProcessZoom(static_cast<float>(scroll_event.dy));
       }
       // Horizontal Pan = Shift + Scroll
       else if (events.is_holding_shift) {
@@ -66,7 +64,7 @@ glm::mat4 renderer::Camera::ProjectionMatrix(float aspect_ratio,
 }
 
 void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
-                   glm::vec3 const& bounds_max) {
+                                   glm::vec3 const& bounds_max) {
   constexpr float kHeightMultiplier = 1.1F;
   constexpr float kFramePadding = 0.55F;
 
@@ -84,8 +82,8 @@ void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
 
   float const distance = std::max(position_[1] - bounds_center[1], 1e-4F);
   float const required_fov =
-    2.0F * std::atan((max_dimension * kFramePadding) / distance) *
-    (180.0F / std::numbers::pi_v<float>);
+      2.0F * std::atan((max_dimension * kFramePadding) / distance) *
+      (180.0F / std::numbers::pi_v<float>);
   zoom_ = std::clamp(required_fov, 10.0F, 120.0F);
 }
 
@@ -93,10 +91,13 @@ void renderer::Camera::ProcessPan(float x_offset, float y_offset) {
   position_ -= (right_ * x_offset + up_ * -y_offset) * movement_speed_;
 }
 
-// void renderer::Camera::ProcessZoom(glm::vec3 mouse_world_pos, float z_offset)
-// {
-//   std::cout << std::format("Zoom = {}", z_offset) << '\n';
-// }
+void renderer::Camera::ProcessZoom(float z_offset) {
+  constexpr float kMinZoom = 5.0F;
+  constexpr float kMaxZoom = 120.0F;
+
+  zoom_ -= z_offset * mouse_sensitivity_;
+  zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
+}
 
 glm::vec3 renderer::Camera::ScreenToWorldSpace(
     core::WindowSize const& window_size, double xpos, double ypos) {

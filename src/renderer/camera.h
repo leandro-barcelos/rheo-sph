@@ -41,7 +41,7 @@ class Camera {
   float zoom_{45.0F};
 
   void ProcessPan(float x_offset = 0.0F, float y_offset = 0.0F);
-  // void ProcessZoom(float z_offset = 0.0F);
+  void ProcessZoom(float z_offset = 0.0F);
   [[nodiscard]] static glm::vec3 ScreenToWorldSpace(
       core::WindowSize const& window_size, double xpos, double ypos);
 };
