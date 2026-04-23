@@ -1,5 +1,7 @@
 #include "renderer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include "imgui.h"
@@ -174,6 +176,22 @@ void Renderer::ProcessInput(core::WindowSize const& window_size,
                             core::InputEvent const& events) {
   bool ignore_mouse_events = ImGui::GetIO().WantCaptureMouse;
   camera_.ProcessInput(window_size, events, ignore_mouse_events);
+}
+
+void Renderer::InitTopViewCamera(
+    simulation::FluidSimulator::Parameters const& params) {
+  float const requested_spacing = params.initial_particle_spacing;
+  float const spacing =
+      requested_spacing > 0.0F ? requested_spacing : (1.0F / 9.0F);
+  uint32_t const grid_resolution =
+      std::max(3U, static_cast<uint32_t>(std::floor(1.0F / spacing)) + 1U);
+  float const simulation_extent =
+      1.0F / static_cast<float>(grid_resolution - 1) *
+      static_cast<float>(grid_resolution - 1);
+
+  camera_.InitTopView(glm::vec3(0.0F, 0.0F, 0.0F),
+                      glm::vec3(simulation_extent, simulation_extent,
+                                simulation_extent));
 }
 
 void Renderer::Shutdown() {

@@ -1,7 +1,6 @@
 #ifndef RHEOSPH_CAMERA_H
 #define RHEOSPH_CAMERA_H
 
-#include <cstdint>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/glm.hpp>
 
@@ -26,6 +25,7 @@ class Camera {
   [[nodiscard]] glm::mat4 ProjectionMatrix(float aspect_ratio,
                                            float near_plane = 0.1F,
                                            float far_plane = 100.0F) const;
+  void InitTopView(glm::vec3 const& bounds_min, glm::vec3 const& bounds_max);
   [[nodiscard]] glm::vec3 Position() const { return position_; }
   [[nodiscard]] glm::vec3 Front() const { return front_; }
   [[nodiscard]] float Zoom() const { return zoom_; }

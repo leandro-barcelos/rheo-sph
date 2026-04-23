@@ -52,6 +52,7 @@ class Renderer {
 
   void ProcessInput(core::WindowSize const& window_size,
                     core::InputEvent const& events);
+    void InitTopViewCamera(simulation::FluidSimulator::Parameters const& params);
 
   void Shutdown();
 

@@ -135,6 +135,7 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
   if ((intent.parameters_changed || loaded_config) &&
       built_parameters.has_value()) {
     session_.ApplyParameters(*built_parameters, vulkan_device_, command_pools_);
+    renderer_.InitTopViewCamera(*built_parameters);
   }
 
   switch (intent.sim_action) {
@@ -150,6 +151,7 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       break;
     case UiIntent::SimAction::kReset:
       if (built_parameters.has_value()) {
+        renderer_.InitTopViewCamera(*built_parameters);
         session_.Reset(vulkan_device_, command_pools_);
       }
       break;
