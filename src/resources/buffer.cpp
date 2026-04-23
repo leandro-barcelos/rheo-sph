@@ -41,6 +41,16 @@ resources::AllocatedBuffer resources::BufferAllocator::CreateBuffer(
   };
 }
 
+resources::AllocatedBuffer resources::BufferAllocator::CreateMappedUniformBuffer(
+        core::VulkanDevice const& vulkan_device, vk::DeviceSize size) {
+    auto uniform_buffer = CreateBuffer(
+            vulkan_device, size, vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible |
+                    vk::MemoryPropertyFlagBits::eHostCoherent);
+    uniform_buffer.mapped = uniform_buffer.memory.mapMemory(0, size);
+    return uniform_buffer;
+}
+
 template <typename T>
 resources::AllocatedBuffer resources::BufferAllocator::CreateUniformBuffer(
     core::VulkanDevice const& vulkan_device,

@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "imgui.h"
+
 namespace renderer {
 
 void Renderer::Init(core::Window const& window,
@@ -14,9 +16,7 @@ void Renderer::Init(core::Window const& window,
   CreateGraphicsCommandBuffer(vulkan_device, command_pools);
 }
 
-void Renderer::BeginUiFrame() const {
-  imgui_layer_.BeginFrame();
-}
+void Renderer::BeginUiFrame() const { imgui_layer_.BeginFrame(); }
 
 void Renderer::EndUiFrame() const { imgui_layer_.EndFrame(); }
 
@@ -57,7 +57,8 @@ void Renderer::RenderFrame(core::VulkanDevice const& vulkan_device,
       .pColorAttachments = &attachment_info};
   command_buffer.beginRendering(rendering_info);
 
-  fluid_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator);
+  fluid_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator,
+                         camera_);
   imgui_layer_.Render(command_buffer);
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
 
@@ -120,8 +121,8 @@ void Renderer::OnSwapChainRecreated(
 }
 
 UiTextureHandle Renderer::AddUiTexture(vk::Sampler sampler,
-                                      vk::ImageView image_view,
-                                      vk::ImageLayout image_layout) {
+                                       vk::ImageView image_view,
+                                       vk::ImageLayout image_layout) {
   return imgui_layer_.AddTexture(sampler, image_view, image_layout);
 }
 
@@ -133,14 +134,15 @@ void Renderer::RemoveUiTexture(UiTextureHandle handle) {
   imgui_layer_.RemoveTexture(handle);
 }
 
-UiTextureHandle Renderer::LoadUiTexture(std::string const& path,
-                                       core::VulkanDevice const& vulkan_device,
-                                       core::CommandPools const& command_pools) {
-  resources::AllocatedImage image =
-      resources::ImageAllocator::CreateImage(vulkan_device, command_pools, path);
+UiTextureHandle Renderer::LoadUiTexture(
+    std::string const& path, core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools) {
+  resources::AllocatedImage image = resources::ImageAllocator::CreateImage(
+      vulkan_device, command_pools, path);
 
-  UiTextureHandle const handle = AddUiTexture(
-      *image.sampler, *image.image_view, vk::ImageLayout::eShaderReadOnlyOptimal);
+  UiTextureHandle const handle =
+      AddUiTexture(*image.sampler, *image.image_view,
+                   vk::ImageLayout::eShaderReadOnlyOptimal);
   if (!handle.IsValid()) {
     return kNullUiTexture;
   }
@@ -166,6 +168,12 @@ void Renderer::UnloadUiTexture(UiTextureHandle handle) {
 
 void* Renderer::ResolveImGuiTextureId(UiTextureHandle handle) const {
   return imgui_layer_.ResolveImGuiTextureId(handle);
+}
+
+void Renderer::ProcessInput(core::WindowSize const& window_size,
+                            core::InputEvent const& events) {
+  bool ignore_mouse_events = ImGui::GetIO().WantCaptureMouse;
+  camera_.ProcessInput(window_size, events, ignore_mouse_events);
 }
 
 void Renderer::Shutdown() {

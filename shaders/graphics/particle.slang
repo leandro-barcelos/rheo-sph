@@ -1,3 +1,11 @@
+struct CameraUBO {
+  float4x4 model;
+  float4x4 view;
+  float4x4 proj;
+};
+
+ConstantBuffer<CameraUBO> camera;
+
 struct VSInput {
   float3 in_position;
   float3 in_velocity;
@@ -19,7 +27,9 @@ struct PSInput {
 [shader("vertex")]
 VSOutput vert_main(VSInput input) {
   VSOutput output;
-  output.pos = float4(input.in_position, 1.0);
+  float4 worldPos = mul(camera.model, float4(input.in_position, 1.0));
+  float4 viewPos = mul(camera.view, worldPos);
+  output.pos = mul(camera.proj, viewPos);
   output.point_size = 4.0;
   output.frag_color = float3(0.0, 0.0, 1.0);
   return output;

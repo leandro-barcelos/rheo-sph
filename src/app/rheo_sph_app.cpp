@@ -1,11 +1,11 @@
 #include "rheo_sph_app.h"
 
+#include <GLFW/glfw3.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <GLFW/glfw3.h>
 
 #include "../core/command_pool.h"
 #include "../core/vulkan_device.h"
@@ -17,12 +17,11 @@
 
 namespace {
 
-void SetElevationPreviewTexture(std::string const& texture_path,
-                               renderer::Renderer& renderer,
-                               core::VulkanDevice const& vulkan_device,
-                               core::CommandPools const& command_pools,
-                               app::UiController& ui_controller,
-                               renderer::UiTextureHandle& elevation_preview_texture) {
+void SetElevationPreviewTexture(
+    std::string const& texture_path, renderer::Renderer& renderer,
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools, app::UiController& ui_controller,
+    renderer::UiTextureHandle& elevation_preview_texture) {
   if (elevation_preview_texture.IsValid()) {
     renderer.UnloadUiTexture(elevation_preview_texture);
     elevation_preview_texture = renderer::kNullUiTexture;
@@ -76,10 +75,12 @@ void app::RheoSPHApp::MainLoop() {
 
   while (!window_.ShouldClose()) {
     core::Window::PollEvents();
+    auto input_events = window_.DrainInputEvents();
+    renderer_.ProcessInput(window_.Size(), input_events);
 
     // 1. Acquire
     uint32_t const image_index =
-      vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
+        vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
     if (image_index == core::VulkanSwapChain::kInvalidImageIndex) {
       vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
       renderer_.OnSwapChainRecreated(vulkan_swap_chain_);
@@ -97,7 +98,8 @@ void app::RheoSPHApp::MainLoop() {
     // 4. Simulate + Render
     auto sim_signal = session_.Tick(vulkan_device_, frame_sync_, delta_time_);
     renderer_.RenderFrame(vulkan_device_, vulkan_swap_chain_, frame_sync_,
-                          session_.Simulator(), image_index, window_, sim_signal);
+                          session_.Simulator(), image_index, window_,
+                          sim_signal);
 
     UpdateDeltaTime();
   }
@@ -105,8 +107,8 @@ void app::RheoSPHApp::MainLoop() {
 
 void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
   if (intent.new_texture_path.has_value()) {
-    SetElevationPreviewTexture(*intent.new_texture_path, renderer_, vulkan_device_,
-                               command_pools_, ui_controller_,
+    SetElevationPreviewTexture(*intent.new_texture_path, renderer_,
+                               vulkan_device_, command_pools_, ui_controller_,
                                elevation_preview_texture_);
   }
 
@@ -120,16 +122,18 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
     if (loaded_config) {
       session_.Pause();
 
-      SetElevationPreviewTexture(ui_controller_.GetElevationTexturePath(), renderer_,
-                                 vulkan_device_, command_pools_, ui_controller_,
-                                 elevation_preview_texture_);
+      SetElevationPreviewTexture(ui_controller_.GetElevationTexturePath(),
+                                 renderer_, vulkan_device_, command_pools_,
+                                 ui_controller_, elevation_preview_texture_);
     }
   }
 
   std::optional<simulation::FluidSimulator::Parameters> built_parameters =
-      loaded_config ? ui_controller_.BuildParameters() : intent.built_parameters;
+      loaded_config ? ui_controller_.BuildParameters()
+                    : intent.built_parameters;
 
-  if ((intent.parameters_changed || loaded_config) && built_parameters.has_value()) {
+  if ((intent.parameters_changed || loaded_config) &&
+      built_parameters.has_value()) {
     session_.ApplyParameters(*built_parameters, vulkan_device_, command_pools_);
   }
 

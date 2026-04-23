@@ -1,6 +1,7 @@
 #ifndef RHEOSPH_WINDOW_H
 #define RHEOSPH_WINDOW_H
 
+#include "input_events.h"
 #include "vulkan/vulkan.hpp"
 #include "vulkan_context.h"
 #include "vulkan_device.h"
@@ -38,6 +39,7 @@ class Window {
   [[nodiscard]] static std::vector<const char*> GetRequiredExtensions();
   [[nodiscard]] WindowSize Size() const;
   static void WaitEvents();
+  [[nodiscard]] InputEvent DrainInputEvents();
 
   [[nodiscard]] vk::SurfaceCapabilitiesKHR Capabilities(
       VulkanDevice const& vulkan_device) const;
@@ -51,7 +53,16 @@ class Window {
  private:
   GLFWwindow* window_;
   vk::raii::SurfaceKHR surface_ = nullptr;
+  InputEvent input_events_;
 
+  void SetEventCallbacks();
+  static void KeyCallback(GLFWwindow* window, int key, int scancode, int action,
+                          int mods);
+  static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+  static void MouseButtonCallback(GLFWwindow* window, int button, int action,
+                                  int mods);
+  static void ScrollCallback(GLFWwindow* window, double xoffset,
+                             double yoffset);
   static void ErrorCallback(int error, const char* description);
 };
 }  // namespace core

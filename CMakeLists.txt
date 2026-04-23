@@ -74,6 +74,7 @@ target_sources(
         src/core/command_pool.h
         src/core/frame_sync.cpp
         src/core/frame_sync.h
+        src/core/input_events.h
         src/core/pipeline.cpp
         src/core/pipeline.h
         src/core/vulkan_context.cpp
@@ -84,6 +85,8 @@ target_sources(
         src/core/vulkan_swap_chain.h
         src/core/window.cpp
         src/core/window.h
+        src/renderer/camera.cpp
+        src/renderer/camera.h
         src/renderer/fluid_renderer.cpp
         src/renderer/fluid_renderer.h
         src/renderer/renderer.cpp
@@ -114,7 +117,10 @@ target_sources(
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE external)
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp)
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp
+)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)

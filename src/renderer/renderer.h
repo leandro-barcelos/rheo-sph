@@ -1,9 +1,9 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <optional>
 #include <string>
 #include <unordered_map>
-#include <optional>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "../core/command_pool.h"
@@ -12,10 +12,12 @@
 #include "../core/vulkan_device.h"
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
+#include "../resources/images.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/imgui_layer.h"
-#include "../resources/images.h"
 #include "fluid_renderer.h"
+#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/renderer/camera.h"
 #include "ui_texture_handle.h"
 
 namespace renderer {
@@ -36,17 +38,20 @@ class Renderer {
                    std::optional<uint64_t> simulation_signal_value);
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
 
-    [[nodiscard]] UiTextureHandle AddUiTexture(vk::Sampler sampler,
-                                                                                        vk::ImageView image_view,
-                                                                                        vk::ImageLayout image_layout);
-    void RemoveUiTexture(UiTextureHandle handle);
+  [[nodiscard]] UiTextureHandle AddUiTexture(vk::Sampler sampler,
+                                             vk::ImageView image_view,
+                                             vk::ImageLayout image_layout);
+  void RemoveUiTexture(UiTextureHandle handle);
 
-    [[nodiscard]] UiTextureHandle LoadUiTexture(
-            std::string const& path, core::VulkanDevice const& vulkan_device,
-            core::CommandPools const& command_pools);
-    void UnloadUiTexture(UiTextureHandle handle);
+  [[nodiscard]] UiTextureHandle LoadUiTexture(
+      std::string const& path, core::VulkanDevice const& vulkan_device,
+      core::CommandPools const& command_pools);
+  void UnloadUiTexture(UiTextureHandle handle);
 
-    [[nodiscard]] void* ResolveImGuiTextureId(UiTextureHandle handle) const;
+  [[nodiscard]] void* ResolveImGuiTextureId(UiTextureHandle handle) const;
+
+  void ProcessInput(core::WindowSize const& window_size,
+                    core::InputEvent const& events);
 
   void Shutdown();
 
@@ -55,7 +60,8 @@ class Renderer {
   vk::raii::CommandBuffer graphics_command_buffer_ = nullptr;
   FluidRenderer fluid_renderer_;
   ui::ImGuiLayer imgui_layer_;
-    std::unordered_map<uint32_t, resources::AllocatedImage> ui_textures_;
+  std::unordered_map<uint32_t, resources::AllocatedImage> ui_textures_;
+  Camera camera_{glm::vec3(0.5F, 2.0F, 0.5F)};
 
   void CreateGraphicsCommandBuffer(core::VulkanDevice const& vulkan_device,
                                    core::CommandPools const& command_pools);

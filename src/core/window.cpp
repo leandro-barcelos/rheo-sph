@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "rheo-sph/src/core/input_events.h"
 #include "vulkan_device.h"
 
 #if defined(__linux__)
@@ -60,6 +61,12 @@ core::Window::Window(const WindowProperties properties) {
   if (window_ == nullptr) {
     throw std::runtime_error("[ERROR] GLFW: failed to create window");
   }
+
+  glfwSetWindowUserPointer(window_, static_cast<void*>(&input_events_));
+  glfwSetKeyCallback(window_, KeyCallback);
+  glfwSetCursorPosCallback(window_, CursorPosCallback);
+  glfwSetMouseButtonCallback(window_, MouseButtonCallback);
+  glfwSetScrollCallback(window_, ScrollCallback);
 }
 
 core::Window::~Window() {
@@ -111,6 +118,20 @@ core::WindowSize core::Window::Size() const {
 
 void core::Window::WaitEvents() { glfwWaitEvents(); }
 
+core::InputEvent core::Window::DrainInputEvents() {
+  InputEvent drained;
+  drained.is_holding_shift = input_events_.is_holding_shift;
+  drained.is_holding_control = input_events_.is_holding_control;
+  drained.is_holding_mouse_left_click =
+      input_events_.is_holding_mouse_left_click;
+  drained.prev_mouse_xpos = input_events_.prev_mouse_xpos;
+  drained.prev_mouse_ypos = input_events_.prev_mouse_ypos;
+  drained.events = std::move(input_events_.events);
+
+  input_events_.events.clear();
+  return drained;
+}
+
 vk::SurfaceCapabilitiesKHR core::Window::Capabilities(
     VulkanDevice const& vulkan_device) const {
   return vulkan_device.PhysicalDevice().getSurfaceCapabilitiesKHR(*surface_);
@@ -124,6 +145,79 @@ std::vector<vk::SurfaceFormatKHR> core::Window::Formats(
 std::vector<vk::PresentModeKHR> core::Window::PresentModes(
     VulkanDevice const& vulkan_device) const {
   return vulkan_device.PhysicalDevice().getSurfacePresentModesKHR(*surface_);
+}
+
+void core::Window::SetEventCallbacks() {
+  glfwSetKeyCallback(window_, KeyCallback);
+}
+
+void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
+                               int action, int /*mods*/) {
+  InputEvent* input_events = nullptr;
+  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  switch (key) {
+    case GLFW_KEY_LEFT_SHIFT:
+    case GLFW_KEY_RIGHT_SHIFT:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        input_events->is_holding_shift = true;
+      } else if (action == GLFW_RELEASE) {
+        input_events->is_holding_shift = false;
+      }
+      break;
+    case GLFW_KEY_LEFT_CONTROL:
+    case GLFW_KEY_RIGHT_CONTROL:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        input_events->is_holding_control = true;
+      } else if (action == GLFW_RELEASE) {
+        input_events->is_holding_control = false;
+      }
+      break;
+    default:
+      return;
+  }
+}
+
+void core::Window::CursorPosCallback(GLFWwindow* window, double xpos,
+                                     double ypos) {
+  InputEvent* input_events = nullptr;
+  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+
+  if (input_events->prev_mouse_xpos.has_value() &&
+      input_events->prev_mouse_ypos.has_value()) {
+    double distance_x = xpos - input_events->prev_mouse_xpos.value();
+    double distance_y = ypos - input_events->prev_mouse_ypos.value();
+    input_events->events.emplace_back(
+        MouseMovedEvent{.dx = distance_x, .dy = distance_y});
+  }
+
+  input_events->prev_mouse_xpos = xpos;
+  input_events->prev_mouse_ypos = ypos;
+}
+
+void core::Window::MouseButtonCallback(GLFWwindow* window,
+                                       int button,  // NOLINT
+                                       int action, int /*mods*/) {
+  InputEvent* input_events = nullptr;
+  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  if (button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+      input_events->is_holding_mouse_left_click = true;
+    } else if (action == GLFW_RELEASE) {
+      input_events->is_holding_mouse_left_click = false;
+    }
+  }
+}
+
+void core::Window::ScrollCallback(GLFWwindow* window, double /*xoffset*/,
+                                  double yoffset) {
+  InputEvent* input_events = nullptr;
+  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+
+  double xpos = 0;
+  double ypos = 0;
+  glfwGetCursorPos(window, &xpos, &ypos);
+  input_events->events.emplace_back(
+      MouseScrollEvent{.dy = yoffset, .x = xpos, .y = ypos});
 }
 
 void core::Window::ErrorCallback(int error, const char* description) {
