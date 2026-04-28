@@ -5,23 +5,37 @@
 
 #include <algorithm>
 
-resources::GeoTiff::GeoTiff(const char* filename)
-    : filename_(filename),
-      geotiff_dataset_(
-          reinterpret_cast<GDALDataset*>(GDALOpen(filename_, GA_ReadOnly))) {
+namespace {
+
+GDALDataset* OpenGeoTiffDataset(char const* filename) {
   GDALAllRegister();
-  dimensions_ = {GDALGetRasterXSize(geotiff_dataset_),
-                 GDALGetRasterYSize(geotiff_dataset_),
-                 GDALGetRasterCount(geotiff_dataset_)};
+  return reinterpret_cast<GDALDataset*>(GDALOpen(filename, GA_ReadOnly));
+}
+
+}  // namespace
+
+resources::GeoTiff::GeoTiff(const char* filename)
+    : filename_(filename), geotiff_dataset_(OpenGeoTiffDataset(filename_)) {
+  if (geotiff_dataset_ != nullptr) {
+    dimensions_ = {GDALGetRasterXSize(geotiff_dataset_),
+                   GDALGetRasterYSize(geotiff_dataset_),
+                   GDALGetRasterCount(geotiff_dataset_)};
+  }
 }
 
 resources::GeoTiff::~GeoTiff() {
-  GDALClose(geotiff_dataset_);
+  if (geotiff_dataset_ != nullptr) {
+    GDALClose(geotiff_dataset_);
+  }
   GDALDestroyDriverManager();
 }
 
-std::vector<std::vector<float>> resources::GeoTiff::Data(int layer) {
+std::vector<resources::Elevation> resources::GeoTiff::Elevations(int layer) {
   if (geotiff_dataset_ == nullptr) {
+    return {};
+  }
+
+  if (dimensions_[0] <= 0 || dimensions_[1] <= 0 || dimensions_[2] <= 0) {
     return {};
   }
 
@@ -43,21 +57,24 @@ std::vector<std::vector<float>> resources::GeoTiff::Data(int layer) {
     return {};
   }
 
-  std::vector<std::vector<float>> out;
-  out.reserve(height);
-  for (int j = 0; j < height; ++j) {
-    std::vector<float> row;
-    row.resize(width);
-    const float* src =
-        buffer
-            .data() +  // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        (static_cast<size_t>(j) * width);
-    for (int i = 0; i < width; ++i) {
-      row[i] =
-          src[i];  // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  std::vector<resources::Elevation> elevations;
+  elevations.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
+
+  for (int row_index = 0; row_index < height; ++row_index) {
+    for (int column_index = 0; column_index < width; ++column_index) {
+      const float width_denominator =
+          width > 1 ? static_cast<float>(width - 1) : 1.0F;
+      const float height_denominator =
+          height > 1 ? static_cast<float>(height - 1) : 1.0F;
+      const float u_coord =
+          static_cast<float>(column_index) / width_denominator;
+      const float v_coord = static_cast<float>(row_index) / height_denominator;
+      elevations.push_back(
+          {.uv = {u_coord, v_coord},
+           .elevation = buffer[(static_cast<size_t>(row_index) * width) +
+                               static_cast<size_t>(column_index)]});
     }
-    out.push_back(std::move(row));
   }
 
-  return out;
+  return elevations;
 }

@@ -5,6 +5,9 @@
 #include <gdal_dataset.h>
 
 #include <array>
+#include <vector>
+
+#include "elevation.h"
 
 namespace resources {
 
@@ -20,7 +23,7 @@ class GeoTiff {
   [[nodiscard]] std::array<int, 3> const& Dimensions() const {
     return dimensions_;
   }
-  [[nodiscard]] std::vector<std::vector<float>> Data(int layer = 1);
+  [[nodiscard]] std::vector<Elevation> Elevations(int layer = 1);
 
  private:
   const char* filename_;

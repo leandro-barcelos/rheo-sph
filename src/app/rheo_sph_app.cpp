@@ -4,42 +4,15 @@
 
 #include <cstdint>
 #include <optional>
-#include <string>
 #include <vector>
 
 #include "../core/command_pool.h"
 #include "../core/vulkan_device.h"
 #include "../core/window.h"
 #include "../renderer/renderer.h"
-#include "../renderer/ui_texture_handle.h"
 #include "../simulation/fluid_simulator.h"
 #include "ui_controller.h"
 
-namespace {
-
-void SetElevationPreviewTexture(
-    std::string const& texture_path, renderer::Renderer& renderer,
-    core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools, app::UiController& ui_controller,
-    renderer::UiTextureHandle& elevation_preview_texture) {
-  if (elevation_preview_texture.IsValid()) {
-    renderer.UnloadUiTexture(elevation_preview_texture);
-    elevation_preview_texture = renderer::kNullUiTexture;
-  }
-
-  if (texture_path.empty()) {
-    ui_controller.NotifyTextureLoaded(renderer::kNullUiTexture, nullptr);
-    return;
-  }
-
-  elevation_preview_texture =
-      renderer.LoadUiTexture(texture_path, vulkan_device, command_pools);
-  ui_controller.NotifyTextureLoaded(
-      elevation_preview_texture,
-      renderer.ResolveImGuiTextureId(elevation_preview_texture));
-}
-
-}  // namespace
 
 void app::RheoSPHApp::Run() {
   Init();
@@ -106,12 +79,6 @@ void app::RheoSPHApp::MainLoop() {
 }
 
 void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
-  if (intent.new_texture_path.has_value()) {
-    SetElevationPreviewTexture(*intent.new_texture_path, renderer_,
-                               vulkan_device_, command_pools_, ui_controller_,
-                               elevation_preview_texture_);
-  }
-
   if (intent.save_path.has_value()) {
     (void)ui_controller_.SaveSimulationConfig(*intent.save_path);
   }
@@ -121,10 +88,6 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
     loaded_config = ui_controller_.LoadSimulationConfig(*intent.load_path);
     if (loaded_config) {
       session_.Pause();
-
-      SetElevationPreviewTexture(ui_controller_.GetElevationTexturePath(),
-                                 renderer_, vulkan_device_, command_pools_,
-                                 ui_controller_, elevation_preview_texture_);
     }
   }
 

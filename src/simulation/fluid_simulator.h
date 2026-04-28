@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
@@ -13,7 +14,7 @@
 #include "../core/vulkan_device.h"
 #include "../resources/buffer.h"
 #include "../resources/descriptor.h"
-#include "../resources/images.h"
+#include "../resources/elevation.h"
 
 namespace simulation {
 
@@ -29,7 +30,9 @@ class FluidSimulator {
     float viscosity;
     float gas_constant;
     float coefficient_of_restitution;
-    std::string elevation_texture_filename;
+    std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
+    uint32_t elevation_width;
+    uint32_t elevation_height;
     float min_elevation;
     float max_elevation;
     float friction;
@@ -55,7 +58,9 @@ class FluidSimulator {
     float max_elevation;
     float mu;
     float yield_stress;
-    std::array<uint32_t, 3> padding0;
+    uint32_t elevation_width;
+    uint32_t elevation_height;
+    uint32_t elevation_padding_3;
     glm::uvec4 bucket_size;
     glm::vec4 min_bound;
     glm::vec4 max_bound;
@@ -170,8 +175,8 @@ class FluidSimulator {
       uint64_t wait_value);
 
   // Vel-Pos Shader
-  std::string elevation_texture_filename_;
-  resources::AllocatedImage elevation_texture_;
+  std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples_;
+  resources::AllocatedBuffer elevation_buffer_;
   PushConstants push_constants_{};
   vk::raii::CommandBuffer vel_pos_command_buffer_ = nullptr;
   vk::raii::PipelineLayout vel_pos_pipeline_layout_ = nullptr;

@@ -1,10 +1,14 @@
 #ifndef UI_CONTROLLER_H
 #define UI_CONTROLLER_H
 
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "../resources/elevation.h"
 #include "../renderer/ui_texture_handle.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/panels/menu_bar_panel.h"
@@ -46,6 +50,8 @@ class UiController {
  private:
   ui::ParametersPanel parameters_panel_;
   std::string pending_elevation_texture_path_;
+  std::shared_ptr<const std::vector<resources::Elevation>> pending_elevation_samples_;
+  std::array<uint32_t, 2> pending_elevation_dimensions_{0U, 0U};
   ui::MenuBarPanel menu_bar_panel_;
 };
 

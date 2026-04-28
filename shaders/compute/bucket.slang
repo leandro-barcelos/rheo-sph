@@ -30,6 +30,9 @@ struct UniformBuffer {
   float max_elevation;
   float mu;
   float yield_stress;
+  uint elevation_width;
+  uint elevation_height;
+  uint elevation_padding;
   uint3 bucket_size;
   float3 min_bound;
   float3 max_bound;

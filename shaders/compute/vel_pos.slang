@@ -37,6 +37,9 @@ struct UniformBuffer {
   float max_elevation;
   float mu;
   float yield_stress;
+  uint elevation_width;
+  uint elevation_height;
+  uint elevation_padding;
   uint3 bucket_size;
   float3 min_bound;
   float3 max_bound;
@@ -55,11 +58,16 @@ struct BucketSSBO {
   uint element;
 };
 
+struct Elevation {
+  float2 uv;
+  float elevation;
+};
+
 StructuredBuffer<WallParticleSSBO> wall_particles_in;
 StructuredBuffer<FluidParticleSSBO> fluid_particles_in;
 RWStructuredBuffer<FluidParticleSSBO> fluid_particles_out;
 StructuredBuffer<BucketSSBO> bucket_in;
-Sampler2D elevation_texture;
+StructuredBuffer<Elevation> elevation_buffer;
 
 float3x3 calculate_strain_rate_tensor(float3 vel_i, float3 neighbor_velocity, float3 r_ij) {
   float inv_r = 1.0 / length(r_ij);
@@ -135,19 +143,39 @@ float grad_W_vis(float3 r) {
              : 0.0;
 }
 
+float sample_elevation(uint x, uint y) {
+  uint index = y * ubo.elevation_width + x;
+  return elevation_buffer[index].elevation;
+}
+
 float get_elevation(float3 pos) {
+  if (ubo.elevation_width == 0 || ubo.elevation_height == 0) {
+    return ubo.min_elevation;
+  }
+
   // Convert world position to UV coordinates (0-1 range)
   float2 uv = (pos.xz - ubo.min_bound.xz) / (ubo.max_bound.xz - ubo.min_bound.xz);
 
   // Clamp UV coordinates to ensure we're within the texture bounds
   uv = clamp(uv, float2(0, 0), float2(1, 1));
 
-  // Sample the elevation texture - this returns a normalized height (0-1)
-  float normalizedElevation = elevation_texture.SampleLevel(uv, 0.0).r;
+  float scaled_x = uv.x * max(1.0, float(ubo.elevation_width - 1));
+  float scaled_y = uv.y * max(1.0, float(ubo.elevation_height - 1));
 
-  // Convert from normalized value to world space elevation using the same formula as in
-  // LoadMap.SampleElevation
-  return ubo.min_elevation + normalizedElevation * (ubo.max_elevation - ubo.min_elevation);
+  uint x0 = min((uint)floor(scaled_x), ubo.elevation_width - 1);
+  uint y0 = min((uint)floor(scaled_y), ubo.elevation_height - 1);
+  uint x1 = min(x0 + 1, ubo.elevation_width - 1);
+  uint y1 = min(y0 + 1, ubo.elevation_height - 1);
+
+  float tx = saturate(scaled_x - float(x0));
+  float ty = saturate(scaled_y - float(y0));
+
+  float e00 = sample_elevation(x0, y0);
+  float e10 = sample_elevation(x1, y0);
+  float e01 = sample_elevation(x0, y1);
+  float e11 = sample_elevation(x1, y1);
+
+  return lerp(lerp(e00, e10, tx), lerp(e01, e11, tx), ty);
 }
 
 float3 get_surface_normal(float3 pos) {
