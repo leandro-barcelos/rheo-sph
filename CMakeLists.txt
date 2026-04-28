@@ -12,6 +12,12 @@ find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
+find_package(GDAL REQUIRED)
+
+if(NOT GDAL_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GDAL REQUIRED gdal)
+endif()
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -98,6 +104,8 @@ target_sources(
         src/resources/buffer.h
         src/resources/descriptor.cpp
         src/resources/descriptor.h
+        src/resources/geotiff.cpp
+        src/resources/geotiff.h
         src/resources/immediate_submit.cpp
         src/resources/immediate_submit.h
         src/resources/images.cpp
@@ -119,7 +127,7 @@ target_sources(
 target_include_directories(${PROJECT_NAME} PRIVATE external)
 target_link_libraries(
     ${PROJECT_NAME}
-    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp
+    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp GDAL::GDAL
 )
 
 if(UNIX AND NOT APPLE)
