@@ -11,10 +11,29 @@
 void renderer::TerrainRenderer::Init(
     core::VulkanDevice const& vulkan_device,
     core::VulkanSwapChain const& vulkan_swap_chain,
-    core::CommandPools const& command_pools, uint32_t elevation_width,
-    uint32_t elevation_height) {
+    core::CommandPools const& command_pools,
+    std::shared_ptr<const std::vector<resources::Elevation>> const&
+        elevation_samples,
+    uint32_t elevation_width, uint32_t elevation_height) {
   if (elevation_width < 2 || elevation_height < 2) {
     return;
+  }
+  if (elevation_samples == nullptr || elevation_samples->empty()) {
+    return;
+  }
+
+  // If already initialized, wait idle before destroying old GPU resources.
+  if (is_initialized_) {
+    vulkan_device.Device().waitIdle();
+    is_initialized_ = false;
+    indices_buffer_ = {};
+    elevation_buffer_ = {};
+    camera_ubo_buffer_ = {};
+    camera_descriptor_set_ = nullptr;
+    camera_descriptor_allocator_ = {};
+    camera_descriptor_set_layout_ = nullptr;
+    graphics_pipeline_ = nullptr;
+    graphics_pipeline_layout_ = nullptr;
   }
 
   CreateCameraDescriptorSetLayout(vulkan_device);
@@ -25,16 +44,14 @@ void renderer::TerrainRenderer::Init(
                                     camera_descriptor_pool_sizes);
   CreateGraphicsPipeline(vulkan_device, vulkan_swap_chain);
   CreateIndices(elevation_width, elevation_height);
-  CreateBuffers(vulkan_device, command_pools);
+  CreateBuffers(vulkan_device, command_pools, elevation_samples);
   CreateCameraDescriptorSet(vulkan_device, camera_descriptor_allocator_);
   is_initialized_ = true;
 }
 
 void renderer::TerrainRenderer::Render(
     vk::raii::CommandBuffer const& command_buffer,
-    core::VulkanSwapChain& vulkan_swap_chain,
-    simulation::FluidSimulator const* fluid_simulator,
-    renderer::Camera const& camera) {
+    core::VulkanSwapChain& vulkan_swap_chain, renderer::Camera const& camera) {
   if (!is_initialized_) {
     return;
   }
@@ -53,12 +70,13 @@ void renderer::TerrainRenderer::Render(
                       0.0F, 1.0F));
   command_buffer.setScissor(
       0, vk::Rect2D(vk::Offset2D(0, 0), vulkan_swap_chain.Extent()));
-  if (fluid_simulator != nullptr && !indices_.empty()) {
-    command_buffer.bindVertexBuffers(
-        0, {fluid_simulator->ElevationBuffer().buffer}, {0});
+
+  if (!indices_.empty()) {
+    command_buffer.bindVertexBuffers(0, {elevation_buffer_.buffer}, {0});
     command_buffer.bindIndexBuffer(indices_buffer_.buffer, 0,
                                    vk::IndexType::eUint32);
-    command_buffer.drawIndexed(indices_.size(), 1, 0, 0, 0);
+    command_buffer.drawIndexed(static_cast<uint32_t>(indices_.size()), 1, 0, 0,
+                               0);
   }
 }
 
@@ -78,7 +96,8 @@ void renderer::TerrainRenderer::CreateGraphicsPipeline(
       vk::raii::PipelineLayout(vulkan_device.Device(), pipeline_layout_info);
 
   core::PipelineBuilder::GraphicsOptions options;
-  options.topology = vk::PrimitiveTopology::eTriangleStrip;
+  // Triangle list matches the index generation in CreateIndices().
+  options.topology = vk::PrimitiveTopology::eTriangleList;
 
   graphics_pipeline_ = core::PipelineBuilder::Graphics(
       vulkan_device, binding_description, attribute_descriptions,
@@ -104,15 +123,25 @@ void renderer::TerrainRenderer::CreateCameraDescriptorSetLayout(
 
 void renderer::TerrainRenderer::CreateBuffers(
     core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools) {
+    core::CommandPools const& command_pools,
+    std::shared_ptr<const std::vector<resources::Elevation>> const&
+        elevation_samples) {
   camera_ubo_buffer_ = resources::BufferAllocator::CreateMappedUniformBuffer(
       vulkan_device, sizeof(CameraUBO));
+
   if (!indices_.empty()) {
-    indices_buffer_ = std::move(resources::BufferAllocator::CreateSSBO(
-                                    vulkan_device, command_pools, indices_,
-                                    false, vk::BufferUsageFlagBits::eIndexBuffer)
-                                    .front());
+    indices_buffer_ =
+        std::move(resources::BufferAllocator::CreateSSBO(
+                      vulkan_device, command_pools, indices_, false,
+                      vk::BufferUsageFlagBits::eIndexBuffer)
+                      .front());
   }
+
+  elevation_buffer_ =
+      std::move(resources::BufferAllocator::CreateSSBO(
+                    vulkan_device, command_pools, *elevation_samples, false,
+                    vk::BufferUsageFlagBits::eVertexBuffer)
+                    .front());
 }
 
 void renderer::TerrainRenderer::CreateCameraDescriptorSet(
@@ -139,12 +168,10 @@ void renderer::TerrainRenderer::CreateCameraDescriptorSet(
 void renderer::TerrainRenderer::UpdateUniformBuffer(
     core::VulkanSwapChain const& vulkan_swap_chain,
     renderer::Camera const& camera) {
-  float aspect_ratio = static_cast<float>(vulkan_swap_chain.Extent().width) /
-                       static_cast<float>(vulkan_swap_chain.Extent().height);
+  float const aspect_ratio =
+      static_cast<float>(vulkan_swap_chain.Extent().width) /
+      static_cast<float>(vulkan_swap_chain.Extent().height);
 
-  float elevation_normalization = 1.0F;
-  glm::mat4 scale =
-      glm::scale(glm::mat4(1), glm::vec3(1, elevation_normalization, 1));
   CameraUBO camera_ubo{.model = {1.0F},
                        .view = camera.ViewMatrix(),
                        .proj = camera.ProjectionMatrix(aspect_ratio)};
@@ -156,17 +183,28 @@ void renderer::TerrainRenderer::UpdateUniformBuffer(
 
 void renderer::TerrainRenderer::CreateIndices(uint32_t width, uint32_t height) {
   indices_.clear();
+  // Each quad (i,j) -> (i+1,j) -> (i,j+1) -> (i+1,j+1) is split into two
+  // counter-clockwise triangles for eTriangleList topology:
+  //   tri0: top-left, bottom-left, top-right
+  //   tri1: top-right, bottom-left, bottom-right
+  indices_.reserve(static_cast<size_t>(width - 1) * (height - 1) * 6);
 
-  for (uint32_t i = 0; i < height - 1; i++) {
-    for (uint32_t j = 0; j < width - 1; j++) {
-      uint32_t index = (i * width) + j;
-      indices_.push_back(index);
-      indices_.push_back(index + 1);
-      indices_.push_back(index + width);
+  for (uint32_t row = 0; row < height - 1; ++row) {
+    for (uint32_t col = 0; col < width - 1; ++col) {
+      uint32_t const top_left = (row * width) + col;
+      uint32_t const top_right = top_left + 1;
+      uint32_t const bottom_left = top_left + width;
+      uint32_t const bottom_right = bottom_left + 1;
 
-      indices_.push_back(index + 1);
-      indices_.push_back(index + width + 1);
-      indices_.push_back(index + width);
+      // Triangle 0: tl -> bl -> tr
+      indices_.push_back(top_left);
+      indices_.push_back(bottom_left);
+      indices_.push_back(top_right);
+
+      // Triangle 1: tr -> bl -> br
+      indices_.push_back(top_right);
+      indices_.push_back(bottom_left);
+      indices_.push_back(bottom_right);
     }
   }
 }

@@ -1,7 +1,6 @@
 #include "renderer.h"
 
 #include <algorithm>
-#include <cmath>
 #include <utility>
 
 #include "imgui.h"
@@ -60,10 +59,9 @@ void Renderer::RenderFrame(core::VulkanDevice const& vulkan_device,
       .pColorAttachments = &attachment_info};
   command_buffer.beginRendering(rendering_info);
 
+  terrain_renderer_.Render(command_buffer, vulkan_swap_chain, camera_);
   fluid_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator,
                          camera_);
-  terrain_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator,
-                           camera_);
   imgui_layer_.Render(command_buffer);
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
 
@@ -182,10 +180,11 @@ void Renderer::ProcessInput(core::WindowSize const& window_size,
 }
 
 void Renderer::InitTopViewCamera(
-    simulation::FluidSimulator::Parameters const& params) {
+    std::shared_ptr<const std::vector<resources::Elevation>> const&
+        elevation_samples) {
   glm::vec3 bounds_min(std::numeric_limits<float>::infinity());
   glm::vec3 bounds_max(-std::numeric_limits<float>::infinity());
-  for (auto const& elevation_sample : *params.elevation_samples) {
+  for (auto const& elevation_sample : *elevation_samples) {
     bounds_min[0] = std::min(bounds_min[0], elevation_sample.position[0]);
     bounds_min[1] = std::min(bounds_min[1], elevation_sample.position[1]);
     bounds_min[2] = std::min(bounds_min[2], elevation_sample.position[2]);
@@ -201,10 +200,14 @@ void Renderer::InitTopViewCamera(
 void Renderer::InitTerrainRenderer(
     core::VulkanDevice const& vulkan_device,
     core::VulkanSwapChain const& vulkan_swap_chain,
+    std::shared_ptr<const std::vector<resources::Elevation>> const&
+        elevation_samples,
     uint32_t elevation_width, uint32_t elevation_height) {
   if (command_pools_ != nullptr) {
     terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
-                           elevation_width, elevation_height);
+                           elevation_samples, elevation_width,
+                           elevation_height);
+    InitTopViewCamera(elevation_samples);
   }
 }
 

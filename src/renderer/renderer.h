@@ -1,9 +1,11 @@
 #ifndef RHEOSPH_RENDERER_H
 #define RHEOSPH_RENDERER_H
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "../core/command_pool.h"
@@ -12,6 +14,7 @@
 #include "../core/vulkan_device.h"
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
+#include "../resources/elevation.h"
 #include "../resources/images.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/imgui_layer.h"
@@ -53,10 +56,18 @@ class Renderer {
 
   void ProcessInput(core::WindowSize const& window_size,
                     core::InputEvent const& events);
-  void InitTopViewCamera(simulation::FluidSimulator::Parameters const& params);
+  void InitTopViewCamera(
+      std::shared_ptr<const std::vector<resources::Elevation>> const&
+          elevation_samples);
+
+  // Initializes (or re-initializes) the terrain renderer from elevation data.
+  // This is independent of the fluid simulation and can be called as soon as
+  // an elevation texture is loaded.
   void InitTerrainRenderer(
       core::VulkanDevice const& vulkan_device,
       core::VulkanSwapChain const& vulkan_swap_chain,
+      std::shared_ptr<const std::vector<resources::Elevation>> const&
+          elevation_samples,
       uint32_t elevation_width, uint32_t elevation_height);
 
   void Shutdown();

@@ -3,14 +3,16 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <memory>
+#include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "../core/vulkan_device.h"
 #include "../core/vulkan_swap_chain.h"
-#include "../simulation/fluid_simulator.h"
 #include "rheo-sph/src/renderer/camera.h"
 #include "rheo-sph/src/resources/buffer.h"
 #include "rheo-sph/src/resources/descriptor.h"
+#include "rheo-sph/src/resources/elevation.h"
 
 namespace renderer {
 
@@ -18,11 +20,12 @@ class TerrainRenderer {
  public:
   void Init(core::VulkanDevice const& vulkan_device,
             core::VulkanSwapChain const& vulkan_swap_chain,
-            core::CommandPools const& command_pools, uint32_t elevation_width,
+            core::CommandPools const& command_pools,
+            std::shared_ptr<const std::vector<resources::Elevation>> const& elevation_samples,
+            uint32_t elevation_width,
             uint32_t elevation_height);
   void Render(vk::raii::CommandBuffer const& command_buffer,
               core::VulkanSwapChain& vulkan_swap_chain,
-              simulation::FluidSimulator const* fluid_simulator,
               renderer::Camera const& camera);
 
  private:
@@ -41,12 +44,14 @@ class TerrainRenderer {
   vk::raii::DescriptorSet camera_descriptor_set_ = nullptr;
   std::vector<uint32_t> indices_;
   resources::AllocatedBuffer indices_buffer_;
+  resources::AllocatedBuffer elevation_buffer_;
 
   void CreateGraphicsPipeline(core::VulkanDevice const& vulkan_device,
                               core::VulkanSwapChain const& vulkan_swap_chain);
   void CreateCameraDescriptorSetLayout(core::VulkanDevice const& vulkan_device);
   void CreateBuffers(core::VulkanDevice const& vulkan_device,
-                     core::CommandPools const& command_pools);
+                     core::CommandPools const& command_pools,
+                     std::shared_ptr<const std::vector<resources::Elevation>> const& elevation_samples);
   void CreateCameraDescriptorSet(
       core::VulkanDevice const& vulkan_device,
       resources::DescriptorAllocator const& descriptor_allocator);

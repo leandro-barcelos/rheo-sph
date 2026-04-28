@@ -13,7 +13,6 @@
 #include "../simulation/fluid_simulator.h"
 #include "ui_controller.h"
 
-
 void app::RheoSPHApp::Run() {
   Init();
   MainLoop();
@@ -95,13 +94,24 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       loaded_config ? ui_controller_.BuildParameters()
                     : intent.built_parameters;
 
+  if (intent.elevation_changed) {
+    terrain_reinit_pending_ = true;
+  }
+
+  // Re-initialize the terrain whenever elevation data changes (texture upload
+  // or config load), independently of the fluid simulation.
+  if (terrain_reinit_pending_ && built_parameters.has_value()) {
+    renderer_.InitTopViewCamera(built_parameters->elevation_samples);
+    renderer_.InitTerrainRenderer(
+        vulkan_device_, vulkan_swap_chain_, built_parameters->elevation_samples,
+        built_parameters->elevation_width, built_parameters->elevation_height);
+    terrain_reinit_pending_ = false;
+  }
+
+  // Apply fluid simulation parameters when they change.
   if ((intent.parameters_changed || loaded_config) &&
       built_parameters.has_value()) {
     session_.ApplyParameters(*built_parameters, vulkan_device_, command_pools_);
-    renderer_.InitTopViewCamera(*built_parameters);
-    renderer_.InitTerrainRenderer(vulkan_device_, vulkan_swap_chain_,
-                                  built_parameters->elevation_width,
-                                  built_parameters->elevation_height);
   }
 
   switch (intent.sim_action) {
@@ -117,10 +127,6 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       break;
     case UiIntent::SimAction::kReset:
       if (built_parameters.has_value()) {
-        renderer_.InitTopViewCamera(*built_parameters);
-        renderer_.InitTerrainRenderer(vulkan_device_, vulkan_swap_chain_,
-                                      built_parameters->elevation_width,
-                                      built_parameters->elevation_height);
         session_.Reset(vulkan_device_, command_pools_);
       }
       break;

@@ -32,6 +32,9 @@ struct UiIntent {
   std::optional<std::string> load_path;
   SimAction sim_action = SimAction::kNone;
   bool parameters_changed = false;
+  // True when elevation data changed (new texture uploaded or config loaded)
+  // and the terrain renderer should be re-initialized.
+  bool elevation_changed = false;
 };
 
 class UiController {
