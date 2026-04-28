@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <string>
-#include <cstddef>
 
 #include "imgui.h"
 
@@ -75,17 +74,6 @@ bool ui::ParametersPanel::Draw() {
       ImGuiWindowFlags_NoDocking;
 
   if (ImGui::Begin("Parameters", nullptr, window_flags)) {
-    ImGui::TextUnformatted("Elevation texture");
-    if (imgui_texture_id_ != nullptr) {
-      auto const tex_id =
-          static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(imgui_texture_id_));
-      ImGui::Image(ImTextureRef(tex_id), ImVec2(256.0F, 256.0F));
-    } else {
-      ImGui::TextDisabled("No texture loaded");
-    }
-
-    ImGui::Separator();
-
     changed |= DrawOptionalInputFloat("Total fluid volume",
                                       values_.total_fluid_volume, 1000.0F);
     changed |= DrawOptionalInputFloat("Minimum elevation", values_.min_elevation,
@@ -137,8 +125,3 @@ void ui::ParametersPanel::SetValues(Values const& values) {
   values_ = values;
 }
 
-void ui::ParametersPanel::SetElevationTexturePreview(TextureId handle,
-                                                     void* imgui_id) {
-  elevation_texture_preview_ = handle;
-  imgui_texture_id_ = imgui_id;
-}

@@ -1,5 +1,7 @@
 #include "ui_controller.h"
 
+#include <yaml-cpp/yaml.h>
+
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -7,8 +9,6 @@
 #include <ios>
 #include <optional>
 #include <string>
-
-#include <yaml-cpp/yaml.h>
 
 #include "../renderer/ui_texture_handle.h"
 #include "../simulation/fluid_simulator.h"
@@ -34,41 +34,51 @@ std::string EnsureYamlExtension(std::string path) {
 
 template <typename T>
 std::optional<T> ReadOptionalScalar(YAML::Node const& node, char const* key) {
-  YAML::Node const child = node[key];  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  YAML::Node const child = node
+      [key];  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   if (!child || child.IsNull()) {
     return std::nullopt;
   }
   return child.as<T>();
 }
 
-YAML::Node SerializeParametersPanelValues(ui::ParametersPanel::Values const& values,
-                                         std::string const& elevation_texture_path) {
-  auto set_optional = [](YAML::Node& node, char const* key, auto const& optional_value) {
+YAML::Node SerializeParametersPanelValues(
+    ui::ParametersPanel::Values const& values,
+    std::string const& elevation_texture_path) {
+  auto set_optional = [](YAML::Node& node, char const* key,
+                         auto const& optional_value) {
     if (optional_value.has_value()) {
-      node[key] = *optional_value;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      node[key] =
+          *optional_value;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     } else {
-      node[key] = YAML::Node{};  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      node[key] = YAML::
+          Node{};  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     }
   };
 
   YAML::Node root;
-  root["version"] = 1;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  root["elevation_texture_path"] = elevation_texture_path;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  root["version"] =
+      1;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  root["elevation_texture_path"] =
+      elevation_texture_path;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
 
   YAML::Node parameters;
   set_optional(parameters, "total_fluid_volume", values.total_fluid_volume);
   set_optional(parameters, "min_elevation", values.min_elevation);
   set_optional(parameters, "max_elevation", values.max_elevation);
-  set_optional(parameters, "initial_particle_spacing", values.initial_particle_spacing);
+  set_optional(parameters, "initial_particle_spacing",
+               values.initial_particle_spacing);
   set_optional(parameters, "voxel_max_particles", values.voxel_max_particles);
   set_optional(parameters, "viscosity", values.viscosity);
   set_optional(parameters, "rest_density", values.rest_density);
   set_optional(parameters, "gas_constant", values.gas_constant);
-  set_optional(parameters, "coefficient_of_restitution", values.coefficient_of_restitution);
+  set_optional(parameters, "coefficient_of_restitution",
+               values.coefficient_of_restitution);
   set_optional(parameters, "friction", values.friction);
   set_optional(parameters, "yield_stress", values.yield_stress);
 
-  root["parameters"] = parameters;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  root["parameters"] =
+      parameters;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return root;
 }
 
@@ -78,19 +88,24 @@ ui::ParametersPanel::Values DeserializeParametersPanelValues(
 
   values.total_fluid_volume =
       ReadOptionalScalar<float>(parameters_node, "total_fluid_volume");
-  values.min_elevation = ReadOptionalScalar<float>(parameters_node, "min_elevation");
-  values.max_elevation = ReadOptionalScalar<float>(parameters_node, "max_elevation");
+  values.min_elevation =
+      ReadOptionalScalar<float>(parameters_node, "min_elevation");
+  values.max_elevation =
+      ReadOptionalScalar<float>(parameters_node, "max_elevation");
   values.initial_particle_spacing =
       ReadOptionalScalar<float>(parameters_node, "initial_particle_spacing");
   values.voxel_max_particles =
       ReadOptionalScalar<uint32_t>(parameters_node, "voxel_max_particles");
   values.viscosity = ReadOptionalScalar<float>(parameters_node, "viscosity");
-  values.rest_density = ReadOptionalScalar<float>(parameters_node, "rest_density");
-  values.gas_constant = ReadOptionalScalar<float>(parameters_node, "gas_constant");
+  values.rest_density =
+      ReadOptionalScalar<float>(parameters_node, "rest_density");
+  values.gas_constant =
+      ReadOptionalScalar<float>(parameters_node, "gas_constant");
   values.coefficient_of_restitution =
       ReadOptionalScalar<float>(parameters_node, "coefficient_of_restitution");
   values.friction = ReadOptionalScalar<float>(parameters_node, "friction");
-  values.yield_stress = ReadOptionalScalar<float>(parameters_node, "yield_stress");
+  values.yield_stress =
+      ReadOptionalScalar<float>(parameters_node, "yield_stress");
 
   return values;
 }
@@ -98,12 +113,15 @@ ui::ParametersPanel::Values DeserializeParametersPanelValues(
 std::optional<simulation::FluidSimulator::Parameters> BuildSimulationParameters(
     ui::ParametersPanel::Values const& values,
     std::string const& elevation_texture_path) {
-  if (!values.total_fluid_volume.has_value() || !values.min_elevation.has_value() ||
-      !values.max_elevation.has_value() || !values.initial_particle_spacing.has_value() ||
-      !values.voxel_max_particles.has_value() || !values.viscosity.has_value() ||
-      !values.rest_density.has_value() || !values.gas_constant.has_value() ||
-      !values.coefficient_of_restitution.has_value() || !values.friction.has_value() ||
-      !values.yield_stress.has_value() || elevation_texture_path.empty()) {
+  if (!values.total_fluid_volume.has_value() ||
+      !values.min_elevation.has_value() || !values.max_elevation.has_value() ||
+      !values.initial_particle_spacing.has_value() ||
+      !values.voxel_max_particles.has_value() ||
+      !values.viscosity.has_value() || !values.rest_density.has_value() ||
+      !values.gas_constant.has_value() ||
+      !values.coefficient_of_restitution.has_value() ||
+      !values.friction.has_value() || !values.yield_stress.has_value() ||
+      elevation_texture_path.empty()) {
     return std::nullopt;
   }
 
@@ -141,13 +159,15 @@ UiIntent UiController::Draw(bool simulation_running) {
 
   if (menu_events.save_simulation_path.has_value() &&
       !menu_events.save_simulation_path->empty()) {
-    std::string const save_path = EnsureYamlExtension(*menu_events.save_simulation_path);
+    std::string const save_path =
+        EnsureYamlExtension(*menu_events.save_simulation_path);
     intent.save_path = save_path;
   }
 
   if (menu_events.load_simulation_path.has_value() &&
       !menu_events.load_simulation_path->empty()) {
-    std::string const load_path = EnsureYamlExtension(*menu_events.load_simulation_path);
+    std::string const load_path =
+        EnsureYamlExtension(*menu_events.load_simulation_path);
     intent.load_path = load_path;
   }
 
@@ -156,8 +176,8 @@ UiIntent UiController::Draw(bool simulation_running) {
     intent.parameters_changed = true;
   }
 
-  intent.built_parameters = BuildSimulationParameters(parameters_panel_.GetValues(),
-                                                      pending_elevation_texture_path_);
+  intent.built_parameters = BuildSimulationParameters(
+      parameters_panel_.GetValues(), pending_elevation_texture_path_);
   bool const can_play = intent.built_parameters.has_value();
 
   ui::TopBarPanel::Events const top_bar_events =
@@ -180,8 +200,8 @@ bool UiController::SaveSimulationConfig(std::string const& path) {
       std::filesystem::create_directories(output_path.parent_path());
     }
 
-    YAML::Node const root = SerializeParametersPanelValues(parameters_panel_.GetValues(),
-                                 pending_elevation_texture_path_);
+    YAML::Node const root = SerializeParametersPanelValues(
+        parameters_panel_.GetValues(), pending_elevation_texture_path_);
 
     std::ofstream output_stream(path, std::ios::out | std::ios::trunc);
     if (!output_stream.is_open()) {
@@ -203,7 +223,8 @@ bool UiController::SaveSimulationConfig(std::string const& path) {
 bool UiController::LoadSimulationConfig(std::string const& path) {
   try {
     YAML::Node const root = YAML::LoadFile(path);
-    YAML::Node const parameters_node = root["parameters"];  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    YAML::Node const parameters_node = root
+        ["parameters"];  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (!parameters_node || !parameters_node.IsMap()) {
       return false;
     }
@@ -212,8 +233,10 @@ bool UiController::LoadSimulationConfig(std::string const& path) {
         DeserializeParametersPanelValues(parameters_node);
 
     std::string const texture_path =
-      root["elevation_texture_path"]  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        ? root["elevation_texture_path"].as<std::string>()  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        root["elevation_texture_path"]  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+            ? root["elevation_texture_path"]
+                  .as<std::
+                          string>()  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
             : std::string{};
 
     parameters_panel_.SetValues(values);
@@ -221,14 +244,14 @@ bool UiController::LoadSimulationConfig(std::string const& path) {
     menu_bar_panel_.SetElevationTexturePath(texture_path);
     menu_bar_panel_.SetSimulationConfigPath(path);
 
-    parameters_panel_.SetElevationTexturePreview(renderer::kNullUiTexture, nullptr);
     return true;
   } catch (std::exception const&) {
     return false;
   }
 }
 
-std::optional<simulation::FluidSimulator::Parameters> UiController::BuildParameters() const {
+std::optional<simulation::FluidSimulator::Parameters>
+UiController::BuildParameters() const {
   return BuildSimulationParameters(parameters_panel_.GetValues(),
                                    pending_elevation_texture_path_);
 }
@@ -238,13 +261,10 @@ std::string const& UiController::GetElevationTexturePath() const {
 }
 
 void UiController::NotifyTextureLoaded(renderer::UiTextureHandle handle,
-                                      void* imgui_id) {
-  parameters_panel_.SetElevationTexturePreview(handle, imgui_id);
-}
+                                       void* imgui_id) {}
 
 void UiController::ClearTexturePreview() {
   pending_elevation_texture_path_.clear();
-  parameters_panel_.SetElevationTexturePreview(renderer::kNullUiTexture, nullptr);
 }
 
 ui::ParametersPanel::Values const& UiController::GetParameterValues() const {
