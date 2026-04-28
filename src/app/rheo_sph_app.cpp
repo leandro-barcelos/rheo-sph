@@ -99,6 +99,9 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       built_parameters.has_value()) {
     session_.ApplyParameters(*built_parameters, vulkan_device_, command_pools_);
     renderer_.InitTopViewCamera(*built_parameters);
+    renderer_.InitTerrainRenderer(vulkan_device_, vulkan_swap_chain_,
+                                  built_parameters->elevation_width,
+                                  built_parameters->elevation_height);
   }
 
   switch (intent.sim_action) {
@@ -115,6 +118,9 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
     case UiIntent::SimAction::kReset:
       if (built_parameters.has_value()) {
         renderer_.InitTopViewCamera(*built_parameters);
+        renderer_.InitTerrainRenderer(vulkan_device_, vulkan_swap_chain_,
+                                      built_parameters->elevation_width,
+                                      built_parameters->elevation_height);
         session_.Reset(vulkan_device_, command_pools_);
       }
       break;

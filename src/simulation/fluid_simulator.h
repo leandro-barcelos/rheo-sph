@@ -104,6 +104,13 @@ class FluidSimulator {
   [[nodiscard]] uint32_t FluidParticleCount() const {
     return uniform_buffer_data_.fluid_particle_count;
   }
+  [[nodiscard]] resources::AllocatedBuffer const& ElevationBuffer() const {
+    return elevation_buffer_;
+  }
+  [[nodiscard]] uint32_t ElevationSampleCount() const {
+    return uniform_buffer_data_.elevation_width *
+           uniform_buffer_data_.elevation_height;
+  }
 
  private:
   UniformBufferObject uniform_buffer_data_;

@@ -95,6 +95,8 @@ target_sources(
         src/renderer/camera.h
         src/renderer/fluid_renderer.cpp
         src/renderer/fluid_renderer.h
+        src/renderer/terrain_renderer.cpp
+        src/renderer/terrain_renderer.h
         src/renderer/renderer.cpp
         src/renderer/renderer.h
         src/renderer/ui_texture_handle.h
@@ -102,6 +104,8 @@ target_sources(
         src/renderer/ui_texture_registry.h
         src/resources/buffer.cpp
         src/resources/buffer.h
+        src/resources/elevation.cpp
+        src/resources/elevation.h
         src/resources/descriptor.cpp
         src/resources/descriptor.h
         src/resources/geotiff.cpp
@@ -178,10 +182,15 @@ compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "
         -entry vert_main
         -entry frag_main
 )
+compile_slang_shaders(terrain_render_shader "shaders/graphics/terrain.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/terrain.spv"
+        -entry vert_main
+        -entry frag_main
+)
 add_dependencies(
     ${PROJECT_NAME}
     bucket_compute_shader
     density_compute_shader
     vel_pos_compute_shader
     particle_render_shader
+    terrain_render_shader
 )

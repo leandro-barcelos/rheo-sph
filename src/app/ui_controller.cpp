@@ -80,6 +80,8 @@ YAML::Node SerializeParametersPanelValues(
                values.coefficient_of_restitution);
   set_optional(parameters, "friction", values.friction);
   set_optional(parameters, "yield_stress", values.yield_stress);
+  set_optional(parameters, "elevation_resolution_meters",
+               values.elevation_resolution_meters);
 
   root["parameters"] =
       parameters;  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -110,6 +112,8 @@ ui::ParametersPanel::Values DeserializeParametersPanelValues(
   values.friction = ReadOptionalScalar<float>(parameters_node, "friction");
   values.yield_stress =
       ReadOptionalScalar<float>(parameters_node, "yield_stress");
+    values.elevation_resolution_meters =
+      ReadOptionalScalar<float>(parameters_node, "elevation_resolution_meters");
 
   return values;
 }
@@ -153,8 +157,9 @@ std::optional<simulation::FluidSimulator::Parameters> BuildSimulationParameters(
 
 bool LoadElevationSamples(
     std::string const& elevation_texture_path,
-    std::shared_ptr<const std::vector<resources::Elevation>>& elevation_samples,
-    std::array<uint32_t, 2>& elevation_dimensions) {
+  std::shared_ptr<const std::vector<resources::Elevation>>& elevation_samples,
+  std::array<uint32_t, 2>& elevation_dimensions,
+  float resolutionMeters) {
   if (elevation_texture_path.empty()) {
     elevation_samples.reset();
     elevation_dimensions = {0U, 0U};
@@ -169,7 +174,8 @@ bool LoadElevationSamples(
     return false;
   }
 
-  std::vector<resources::Elevation> samples = geotiff.Elevations();
+  std::vector<resources::Elevation> samples =
+      geotiff.Elevations(1, resolutionMeters);
   if (samples.empty()) {
     elevation_samples.reset();
     elevation_dimensions = {0U, 0U};
@@ -193,9 +199,11 @@ UiIntent UiController::Draw(bool simulation_running) {
   ui::MenuBarPanel::Events const menu_events = menu_bar_panel_.Draw();
   if (menu_events.uploaded_texture_path.has_value() &&
       !menu_events.uploaded_texture_path->empty()) {
-    (void)LoadElevationSamples(*menu_events.uploaded_texture_path,
-                               pending_elevation_samples_,
-                               pending_elevation_dimensions_);
+    (void)LoadElevationSamples(
+      *menu_events.uploaded_texture_path, pending_elevation_samples_,
+      pending_elevation_dimensions_,
+      parameters_panel_.GetValues().elevation_resolution_meters.value_or(
+        10.0F));
     pending_elevation_texture_path_ = *menu_events.uploaded_texture_path;
     menu_bar_panel_.SetElevationTexturePath(*menu_events.uploaded_texture_path);
     intent.new_texture_path = *menu_events.uploaded_texture_path;
@@ -287,8 +295,9 @@ bool UiController::LoadSimulationConfig(std::string const& path) {
 
     std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
     std::array<uint32_t, 2> elevation_dimensions{0U, 0U};
-    if (!LoadElevationSamples(texture_path, elevation_samples,
-                              elevation_dimensions)) {
+        if (!LoadElevationSamples(
+          texture_path, elevation_samples, elevation_dimensions,
+          values.elevation_resolution_meters.value_or(10.0F))) {
       return false;
     }
 

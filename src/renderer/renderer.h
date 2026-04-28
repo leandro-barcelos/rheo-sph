@@ -18,6 +18,7 @@
 #include "fluid_renderer.h"
 #include "rheo-sph/src/core/input_events.h"
 #include "rheo-sph/src/renderer/camera.h"
+#include "terrain_renderer.h"
 #include "ui_texture_handle.h"
 
 namespace renderer {
@@ -52,7 +53,11 @@ class Renderer {
 
   void ProcessInput(core::WindowSize const& window_size,
                     core::InputEvent const& events);
-    void InitTopViewCamera(simulation::FluidSimulator::Parameters const& params);
+  void InitTopViewCamera(simulation::FluidSimulator::Parameters const& params);
+  void InitTerrainRenderer(
+      core::VulkanDevice const& vulkan_device,
+      core::VulkanSwapChain const& vulkan_swap_chain,
+      uint32_t elevation_width, uint32_t elevation_height);
 
   void Shutdown();
 
@@ -60,9 +65,11 @@ class Renderer {
   bool framebuffer_resized_ = false;
   vk::raii::CommandBuffer graphics_command_buffer_ = nullptr;
   FluidRenderer fluid_renderer_;
+  TerrainRenderer terrain_renderer_;
   ui::ImGuiLayer imgui_layer_;
   std::unordered_map<uint32_t, resources::AllocatedImage> ui_textures_;
   Camera camera_{glm::vec3(0.5F, 2.0F, 0.5F)};
+  core::CommandPools const* command_pools_ = nullptr;
 
   void CreateGraphicsCommandBuffer(core::VulkanDevice const& vulkan_device,
                                    core::CommandPools const& command_pools);

@@ -8,12 +8,12 @@ namespace ui {
 
 class ParametersPanel {
  public:
-
   struct Values {
     std::optional<float> total_fluid_volume;
     std::optional<float> min_elevation;
     std::optional<float> max_elevation;
     std::optional<float> initial_particle_spacing;
+    std::optional<float> elevation_resolution_meters;
     std::optional<uint32_t> voxel_max_particles;
     std::optional<float> viscosity;
     std::optional<float> rest_density;

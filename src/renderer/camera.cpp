@@ -57,10 +57,9 @@ glm::mat4 renderer::Camera::ViewMatrix() const {
 }
 
 glm::mat4 renderer::Camera::ProjectionMatrix(float aspect_ratio,
-                                             float near_plane,
-                                             float far_plane) const {
+                                             float near_plane) const {
   return glm::perspective(glm::radians(zoom_), aspect_ratio, near_plane,
-                          far_plane);
+                          far_plane_);
 }
 
 void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
@@ -85,6 +84,8 @@ void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
       2.0F * std::atan((max_dimension * kFramePadding) / distance) *
       (180.0F / std::numbers::pi_v<float>);
   zoom_ = std::clamp(required_fov, 10.0F, 120.0F);
+
+  far_plane_ = std::max(position_[1] - bounds_min[1] + max_dimension, 100.0F);
 }
 
 void renderer::Camera::ProcessPan(float x_offset, float y_offset) {

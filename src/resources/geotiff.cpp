@@ -20,6 +20,9 @@ resources::GeoTiff::GeoTiff(const char* filename)
     dimensions_ = {GDALGetRasterXSize(geotiff_dataset_),
                    GDALGetRasterYSize(geotiff_dataset_),
                    GDALGetRasterCount(geotiff_dataset_)};
+
+    has_geo_transform_ =
+        GDALGetGeoTransform(geotiff_dataset_, geo_transform_.data()) == CE_None;
   }
 }
 
@@ -30,7 +33,8 @@ resources::GeoTiff::~GeoTiff() {
   GDALDestroyDriverManager();
 }
 
-std::vector<resources::Elevation> resources::GeoTiff::Elevations(int layer) {
+std::vector<resources::Elevation> resources::GeoTiff::Elevations(
+    int layer, float resolution_meters) { // NOLINT(bugprone-easily-swappable-parameters)
   if (geotiff_dataset_ == nullptr) {
     return {};
   }
@@ -69,10 +73,21 @@ std::vector<resources::Elevation> resources::GeoTiff::Elevations(int layer) {
       const float u_coord =
           static_cast<float>(column_index) / width_denominator;
       const float v_coord = static_cast<float>(row_index) / height_denominator;
-      elevations.push_back(
-          {.uv = {u_coord, v_coord},
-           .elevation = buffer[(static_cast<size_t>(row_index) * width) +
-                               static_cast<size_t>(column_index)]});
+      const auto pixel_x = static_cast<double>(column_index);
+      const auto pixel_y = static_cast<double>(row_index);
+
+      const double origin_x = has_geo_transform_ ? geo_transform_[0] : 0.0;
+      const double origin_z = has_geo_transform_ ? geo_transform_[3] : 0.0;
+      const double world_x =
+          origin_x + (pixel_x * static_cast<double>(resolution_meters));
+      const double world_z =
+          origin_z + (pixel_y * static_cast<double>(resolution_meters));
+      const float elevation = buffer[(static_cast<size_t>(row_index) * width) +
+                                     static_cast<size_t>(column_index)];
+      elevations.push_back({.uv = {u_coord, v_coord},
+                            .elevation = elevation,
+                            .position = {static_cast<float>(world_x), elevation,
+                                         static_cast<float>(world_z)}});
     }
   }
 

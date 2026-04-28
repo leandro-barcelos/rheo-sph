@@ -61,6 +61,7 @@ struct BucketSSBO {
 struct Elevation {
   float2 uv;
   float elevation;
+  float3 position;
 };
 
 StructuredBuffer<WallParticleSSBO> wall_particles_in;

@@ -157,7 +157,8 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
   }
 
   auto elevation_buffers = resources::BufferAllocator::CreateSSBO(
-      vulkan_device, command_pools, *elevation_samples_, false);
+      vulkan_device, command_pools, *elevation_samples_, false,
+      vk::BufferUsageFlagBits::eVertexBuffer);
   elevation_buffer_ = std::move(elevation_buffers.front());
   CreateVelPosDescriptorSetLayout(vulkan_device);
   const std::array vel_pos_descriptor_pool_sizes = {

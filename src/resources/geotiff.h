@@ -23,12 +23,15 @@ class GeoTiff {
   [[nodiscard]] std::array<int, 3> const& Dimensions() const {
     return dimensions_;
   }
-  [[nodiscard]] std::vector<Elevation> Elevations(int layer = 1);
+  [[nodiscard]] std::vector<Elevation> Elevations(
+      int layer = 1, float resolution_meters = 10.0F);
 
  private:
   const char* filename_;
   GDALDataset* geotiff_dataset_ = nullptr;
   std::array<int, 3> dimensions_{0};
+  std::array<double, 6> geo_transform_{0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+  bool has_geo_transform_ = false;
 };
 
 }  // namespace resources

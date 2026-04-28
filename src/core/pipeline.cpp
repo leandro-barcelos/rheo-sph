@@ -61,6 +61,20 @@ vk::raii::Pipeline core::PipelineBuilder::Graphics(
     vk::raii::PipelineLayout const& pipeline_layout,
     core::VulkanSwapChain const& swap_chain,
     std::string const& shader_filename) {
+  return Graphics(vulkan_device, binding_description, attribute_descriptions,
+                  pipeline_layout, swap_chain, shader_filename,
+                  GraphicsOptions{});
+}
+
+vk::raii::Pipeline core::PipelineBuilder::Graphics(
+    core::VulkanDevice const& vulkan_device,
+    vk::VertexInputBindingDescription binding_description,
+    std::vector<vk::VertexInputAttributeDescription> const&
+        attribute_descriptions,
+    vk::raii::PipelineLayout const& pipeline_layout,
+    core::VulkanSwapChain const& swap_chain,
+    std::string const& shader_filename,
+    GraphicsOptions options) {
   vk::raii::ShaderModule shader_module =
       CreateShaderModule(vulkan_device, ReadFile(shader_filename));
 
@@ -83,7 +97,7 @@ vk::raii::Pipeline core::PipelineBuilder::Graphics(
       .pVertexAttributeDescriptions = attribute_descriptions.data()};
 
   vk::PipelineInputAssemblyStateCreateInfo input_assembly{
-      .topology = vk::PrimitiveTopology::ePointList,
+      .topology = options.topology,
       .primitiveRestartEnable = vk::False};
 
   vk::PipelineViewportStateCreateInfo viewport_state{.viewportCount = 1,
@@ -92,9 +106,9 @@ vk::raii::Pipeline core::PipelineBuilder::Graphics(
   vk::PipelineRasterizationStateCreateInfo rasterizer{
       .depthClampEnable = vk::False,
       .rasterizerDiscardEnable = vk::False,
-      .polygonMode = vk::PolygonMode::eFill,
-      .cullMode = vk::CullModeFlagBits::eBack,
-      .frontFace = vk::FrontFace::eCounterClockwise,
+      .polygonMode = options.polygon_mode,
+      .cullMode = options.cull_mode,
+      .frontFace = options.front_face,
       .depthBiasEnable = vk::False,
       .lineWidth = 1.0F};
 
@@ -103,7 +117,7 @@ vk::raii::Pipeline core::PipelineBuilder::Graphics(
       .sampleShadingEnable = vk::False};
 
   vk::PipelineColorBlendAttachmentState color_blending_attachment{
-      .blendEnable = vk::True,
+      .blendEnable = options.enable_blending ? vk::True : vk::False,
       .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
       .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
       .colorBlendOp = vk::BlendOp::eAdd,

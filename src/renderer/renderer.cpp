@@ -13,6 +13,7 @@ void Renderer::Init(core::Window const& window,
                     core::VulkanDevice const& vulkan_device,
                     core::VulkanSwapChain const& vulkan_swap_chain,
                     core::CommandPools const& command_pools) {
+  command_pools_ = &command_pools;
   fluid_renderer_.Init(vulkan_device, vulkan_swap_chain);
   imgui_layer_.Init(window, context, vulkan_device, vulkan_swap_chain);
   CreateGraphicsCommandBuffer(vulkan_device, command_pools);
@@ -61,6 +62,8 @@ void Renderer::RenderFrame(core::VulkanDevice const& vulkan_device,
 
   fluid_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator,
                          camera_);
+  terrain_renderer_.Render(command_buffer, vulkan_swap_chain, fluid_simulator,
+                           camera_);
   imgui_layer_.Render(command_buffer);
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
 
@@ -180,18 +183,29 @@ void Renderer::ProcessInput(core::WindowSize const& window_size,
 
 void Renderer::InitTopViewCamera(
     simulation::FluidSimulator::Parameters const& params) {
-  float const requested_spacing = params.initial_particle_spacing;
-  float const spacing =
-      requested_spacing > 0.0F ? requested_spacing : (1.0F / 9.0F);
-  uint32_t const grid_resolution =
-      std::max(3U, static_cast<uint32_t>(std::floor(1.0F / spacing)) + 1U);
-  float const simulation_extent =
-      1.0F / static_cast<float>(grid_resolution - 1) *
-      static_cast<float>(grid_resolution - 1);
+  glm::vec3 bounds_min(std::numeric_limits<float>::infinity());
+  glm::vec3 bounds_max(-std::numeric_limits<float>::infinity());
+  for (auto const& elevation_sample : *params.elevation_samples) {
+    bounds_min[0] = std::min(bounds_min[0], elevation_sample.position[0]);
+    bounds_min[1] = std::min(bounds_min[1], elevation_sample.position[1]);
+    bounds_min[2] = std::min(bounds_min[2], elevation_sample.position[2]);
 
-  camera_.InitTopView(glm::vec3(0.0F, 0.0F, 0.0F),
-                      glm::vec3(simulation_extent, simulation_extent,
-                                simulation_extent));
+    bounds_max[0] = std::max(bounds_max[0], elevation_sample.position[0]);
+    bounds_max[1] = std::max(bounds_max[1], elevation_sample.position[1]);
+    bounds_max[2] = std::max(bounds_max[2], elevation_sample.position[2]);
+  }
+
+  camera_.InitTopView(bounds_min, bounds_max);
+}
+
+void Renderer::InitTerrainRenderer(
+    core::VulkanDevice const& vulkan_device,
+    core::VulkanSwapChain const& vulkan_swap_chain,
+    uint32_t elevation_width, uint32_t elevation_height) {
+  if (command_pools_ != nullptr) {
+    terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
+                           elevation_width, elevation_height);
+  }
 }
 
 void Renderer::Shutdown() {
