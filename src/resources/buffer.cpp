@@ -6,9 +6,9 @@
 #include <utility>
 #include <vector>
 
+#include "../simulation/fluid_simulator.h"  // IWYU pragma: keep
 #include "immediate_submit.h"
 #include "memory.h"
-#include "../simulation/fluid_simulator.h"  // IWYU pragma: keep
 
 resources::AllocatedBuffer resources::BufferAllocator::CreateBuffer(
     core::VulkanDevice const& vulkan_device, vk::DeviceSize size,
@@ -41,14 +41,15 @@ resources::AllocatedBuffer resources::BufferAllocator::CreateBuffer(
   };
 }
 
-resources::AllocatedBuffer resources::BufferAllocator::CreateMappedUniformBuffer(
-        core::VulkanDevice const& vulkan_device, vk::DeviceSize size) {
-    auto uniform_buffer = CreateBuffer(
-            vulkan_device, size, vk::BufferUsageFlagBits::eUniformBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible |
-                    vk::MemoryPropertyFlagBits::eHostCoherent);
-    uniform_buffer.mapped = uniform_buffer.memory.mapMemory(0, size);
-    return uniform_buffer;
+resources::AllocatedBuffer
+resources::BufferAllocator::CreateMappedUniformBuffer(
+    core::VulkanDevice const& vulkan_device, vk::DeviceSize size) {
+  auto uniform_buffer =
+      CreateBuffer(vulkan_device, size, vk::BufferUsageFlagBits::eUniformBuffer,
+                   vk::MemoryPropertyFlagBits::eHostVisible |
+                       vk::MemoryPropertyFlagBits::eHostCoherent);
+  uniform_buffer.mapped = uniform_buffer.memory.mapMemory(0, size);
+  return uniform_buffer;
 }
 
 template <typename T>
@@ -86,10 +87,11 @@ resources::BufferAllocator::CreateSSBO(core::VulkanDevice const& vulkan_device,
                                        bool double_buffering,
                                        vk::BufferUsageFlags extra_usage_flags) {
   if (objects.empty()) {
-    throw std::runtime_error("[ERROR] Vulkan: Tried creating a buffer with size 0!");
+    throw std::runtime_error(
+        "[ERROR] Vulkan: Tried creating a buffer with size 0!");
   }
-  
-    vk::DeviceSize size = sizeof(T) * objects.size();
+
+  vk::DeviceSize size = sizeof(T) * objects.size();
 
   resources::AllocatedBuffer staging_buffer =
       CreateBuffer(vulkan_device, size, vk::BufferUsageFlagBits::eTransferSrc,
@@ -107,12 +109,11 @@ resources::BufferAllocator::CreateSSBO(core::VulkanDevice const& vulkan_device,
       continue;
     }
 
-    storage_buffers.at(i) =
-        CreateBuffer(vulkan_device, size,
-                     vk::BufferUsageFlagBits::eStorageBuffer |
-                         vk::BufferUsageFlagBits::eTransferDst |
-                         extra_usage_flags,
-                     vk::MemoryPropertyFlagBits::eDeviceLocal);
+    storage_buffers.at(i) = CreateBuffer(
+        vulkan_device, size,
+        vk::BufferUsageFlagBits::eStorageBuffer |
+            vk::BufferUsageFlagBits::eTransferDst | extra_usage_flags,
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     ImmediateSubmit single_time_command;
     single_time_command.CopyBuffer(vulkan_device, command_pools, staging_buffer,
@@ -122,33 +123,36 @@ resources::BufferAllocator::CreateSSBO(core::VulkanDevice const& vulkan_device,
   return storage_buffers;
 }
 
-template resources::AllocatedBuffer
-resources::BufferAllocator::CreateUniformBuffer<
-    simulation::FluidSimulator::UniformBufferObject>(
-    core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools,
-    simulation::FluidSimulator::UniformBufferObject const& data);
+template resources::AllocatedBuffer resources::BufferAllocator::
+    CreateUniformBuffer<simulation::FluidSimulator::UniformBufferObject>(
+        core::VulkanDevice const& vulkan_device,
+        core::CommandPools const& command_pools,
+        simulation::FluidSimulator::UniformBufferObject const& data);
 
-template std::array<resources::AllocatedBuffer, 2>
-resources::BufferAllocator::CreateSSBO<simulation::FluidSimulator::FluidParticle>(
-    core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools,
-    std::vector<simulation::FluidSimulator::FluidParticle> const& objects,
-    bool double_buffering,
-    vk::BufferUsageFlags extra_usage_flags);
+template std::array<resources::AllocatedBuffer, 2> resources::BufferAllocator::
+    CreateSSBO<simulation::FluidSimulator::FluidParticle>(
+        core::VulkanDevice const& vulkan_device,
+        core::CommandPools const& command_pools,
+        std::vector<simulation::FluidSimulator::FluidParticle> const& objects,
+        bool double_buffering, vk::BufferUsageFlags extra_usage_flags);
 
-template std::array<resources::AllocatedBuffer, 2>
-resources::BufferAllocator::CreateSSBO<simulation::FluidSimulator::WallParticle>(
-    core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools,
-    std::vector<simulation::FluidSimulator::WallParticle> const& objects,
-    bool double_buffering,
-    vk::BufferUsageFlags extra_usage_flags);
+template std::array<resources::AllocatedBuffer, 2> resources::BufferAllocator::
+    CreateSSBO<simulation::FluidSimulator::WallParticle>(
+        core::VulkanDevice const& vulkan_device,
+        core::CommandPools const& command_pools,
+        std::vector<simulation::FluidSimulator::WallParticle> const& objects,
+        bool double_buffering, vk::BufferUsageFlags extra_usage_flags);
 
 template std::array<resources::AllocatedBuffer, 2>
 resources::BufferAllocator::CreateSSBO<uint32_t>(
     core::VulkanDevice const& vulkan_device,
     core::CommandPools const& command_pools,
-    std::vector<uint32_t> const& objects,
-    bool double_buffering,
+    std::vector<uint32_t> const& objects, bool double_buffering,
+    vk::BufferUsageFlags extra_usage_flags);
+
+template std::array<resources::AllocatedBuffer, 2>
+resources::BufferAllocator::CreateSSBO<resources::Elevation>(
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools,
+    std::vector<resources::Elevation> const& objects, bool double_buffering,
     vk::BufferUsageFlags extra_usage_flags);

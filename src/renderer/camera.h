@@ -23,8 +23,7 @@ class Camera {
 
   [[nodiscard]] glm::mat4 ViewMatrix() const;
   [[nodiscard]] glm::mat4 ProjectionMatrix(float aspect_ratio,
-                                           float near_plane = 0.1F,
-                                           float far_plane = 100.0F) const;
+                                           float near_plane = 0.1F) const;
   void InitTopView(glm::vec3 const& bounds_min, glm::vec3 const& bounds_max);
   [[nodiscard]] glm::vec3 Position() const { return position_; }
   [[nodiscard]] glm::vec3 Front() const { return front_; }
@@ -39,6 +38,7 @@ class Camera {
   float movement_speed_{1.0F};
   float mouse_sensitivity_{1.0F};
   float zoom_{45.0F};
+  float far_plane_{100.0F};
 
   void ProcessPan(float x_offset = 0.0F, float y_offset = 0.0F);
   void ProcessZoom(float z_offset = 0.0F);

@@ -2,14 +2,15 @@
 
 #include <filesystem>
 
-#include "imgui.h"
 #include "ImGuiFileDialog.h"
+#include "imgui.h"
 
 namespace {
 constexpr const char* kUploadDialogKey = "UploadElevationTextureDialog";
+constexpr const char* kUploadTerrainDialogKey = "UploadTerrainTextureDialog";
 constexpr const char* kSaveSimulationDialogKey = "SaveSimulationDialog";
 constexpr const char* kLoadSimulationDialogKey = "LoadSimulationDialog";
-}
+}  // namespace
 
 ui::MenuBarPanel::MenuBarPanel() {
   SetElevationTexturePath("");
@@ -29,15 +30,26 @@ ui::MenuBarPanel::Events ui::MenuBarPanel::Draw() {
 
         ImGuiFileDialog::Instance()->OpenDialog(
             kUploadDialogKey, "Upload Elevation Texture",
-            "Image files{.png,.jpg,.jpeg,.bmp,.tga,.hdr,.exr,.tif,.tiff},.*",
-            config);
+            "GeoTiff files{.tif,.tiff},.*", config);
+      }
+
+      if (ImGui::MenuItem("Upload terrain preview texture...")) {
+        IGFD::FileDialogConfig config{};
+        config.path = std::filesystem::current_path().string();
+        config.filePathName = terrain_preview_texture_path_;
+        config.flags = ImGuiFileDialogFlags_Modal;
+
+        ImGuiFileDialog::Instance()->OpenDialog(
+            kUploadTerrainDialogKey, "Upload Terrain Preview Texture",
+            "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
       }
 
       if (ImGui::MenuItem("Save simulation...")) {
         IGFD::FileDialogConfig config{};
         config.path = std::filesystem::current_path().string();
         config.filePathName = simulation_config_path_;
-        config.flags = ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
+        config.flags =
+            ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
 
         ImGuiFileDialog::Instance()->OpenDialog(
             kSaveSimulationDialogKey, "Save Simulation Parameters",
@@ -61,10 +73,20 @@ ui::MenuBarPanel::Events ui::MenuBarPanel::Draw() {
   }
 
   if (ImGuiFileDialog::Instance()->Display(
-      kUploadDialogKey, ImGuiWindowFlags_NoCollapse, ImVec2(600.0F, 450.0F),
-      ImVec2(700.0F, 525.0F))) {
+          kUploadDialogKey, ImGuiWindowFlags_NoCollapse, ImVec2(600.0F, 450.0F),
+          ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
       events.uploaded_texture_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  if (ImGuiFileDialog::Instance()->Display(
+          kUploadTerrainDialogKey, ImGuiWindowFlags_NoCollapse,
+          ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      events.uploaded_terrain_texture_path =
           ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
@@ -99,4 +121,8 @@ void ui::MenuBarPanel::SetElevationTexturePath(std::string const& path) {
 
 void ui::MenuBarPanel::SetSimulationConfigPath(std::string const& path) {
   simulation_config_path_ = path;
+}
+
+void ui::MenuBarPanel::SetTerrainPreviewTexturePath(std::string const& path) {
+  terrain_preview_texture_path_ = path;
 }

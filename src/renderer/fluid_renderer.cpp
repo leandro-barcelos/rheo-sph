@@ -33,11 +33,11 @@ void renderer::FluidRenderer::Render(
     renderer::Camera const& camera) {
   UpdateUniformBuffer(vulkan_swap_chain, camera);
 
-    command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                *graphics_pipeline_);
-    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                      *graphics_pipeline_layout_, 0,
-                                      {*camera_descriptor_set_}, {});
+  command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                              *graphics_pipeline_);
+  command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                    *graphics_pipeline_layout_, 0,
+                                    {*camera_descriptor_set_}, {});
   command_buffer.setViewport(
       0, vk::Viewport(0.0F, 0.0F,
                       static_cast<float>(vulkan_swap_chain.Extent().width),

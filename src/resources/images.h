@@ -26,6 +26,10 @@ class ImageAllocator {
   [[nodiscard]] static AllocatedImage CreateImage(
       core::VulkanDevice const& vulkan_device,
       core::CommandPools const& command_pools, std::string const& filepath);
+    [[nodiscard]] static AllocatedImage CreateSolidColorImage(
+      core::VulkanDevice const& vulkan_device,
+      core::CommandPools const& command_pools, uint8_t red, uint8_t green,
+      uint8_t blue, uint8_t alpha);
 };
 
 }  // namespace resources

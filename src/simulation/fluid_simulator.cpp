@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 
 #include "../core/pipeline.h"
 #include "vulkan/vulkan.hpp"
@@ -29,11 +30,10 @@ simulation::FluidSimulator::FluidParticle::GetAttributeDescriptions() {
 }
 
 simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
-    : uniform_buffer_data_{},
-      elevation_texture_filename_(parameters.elevation_texture_filename) {
+    : uniform_buffer_data_{}, elevation_samples_(parameters.elevation_samples) {
   const float requested_spacing = parameters.initial_particle_spacing;
-    const float spacing =
-            requested_spacing > 0.0F ? requested_spacing : (1.0F / 9.0F);
+  const float spacing =
+      requested_spacing > 0.0F ? requested_spacing : (1.0F / 9.0F);
   const uint32_t grid_resolution =
       std::max(3U, static_cast<uint32_t>(std::floor(1.0F / spacing)) + 1U);
   const float step = 1.0F / static_cast<float>(grid_resolution - 1);
@@ -41,9 +41,9 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
   const auto grid_resolution_size = static_cast<std::size_t>(grid_resolution);
   const auto interior_resolution_size =
       static_cast<std::size_t>(grid_resolution - 2);
-  const std::size_t fluid_particle_count =
-      interior_resolution_size * interior_resolution_size *
-      interior_resolution_size;
+  const std::size_t fluid_particle_count = interior_resolution_size *
+                                           interior_resolution_size *
+                                           interior_resolution_size;
   const std::size_t total_grid_particles =
       (grid_resolution_size * grid_resolution_size * grid_resolution_size);
   const std::size_t interior_grid_particles =
@@ -68,12 +68,12 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
           continue;
         }
 
-            fluid_particles_.emplace_back(
-                FluidParticle{.position = position,
-                      .velocity = {0.0F, 0.0F, 0.0F, 0.0F},
-                      .distance_traveled = {0.0F, 0.0F, 0.0F, 0.0F},
-                      .color = {0.2F, 0.6F, 1.0F, 1.0F},
-                      .density = 0.0F});
+        fluid_particles_.emplace_back(
+            FluidParticle{.position = position,
+                          .velocity = {0.0F, 0.0F, 0.0F, 0.0F},
+                          .distance_traveled = {0.0F, 0.0F, 0.0F, 0.0F},
+                          .color = {0.2F, 0.6F, 1.0F, 1.0F},
+                          .density = 0.0F});
       }
     }
   }
@@ -88,8 +88,8 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
   const uint32_t bucket_axis_size =
       static_cast<uint32_t>(std::ceil(simulation_extent / bucket_cell_size)) +
       1U;
-  const glm::uvec4 bucket_size =
-      {bucket_axis_size, bucket_axis_size, bucket_axis_size, 0U};
+  const glm::uvec4 bucket_size = {bucket_axis_size, bucket_axis_size,
+                                  bucket_axis_size, 0U};
 
   uniform_buffer_data_ = {
       .voxel_max_particles = parameters.voxel_max_particles,
@@ -111,7 +111,9 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
       .max_elevation = parameters.max_elevation,
       .mu = parameters.friction,
       .yield_stress = parameters.yield_stress,
-      .padding0 = {0U, 0U, 0U},
+      .elevation_width = parameters.elevation_width,
+      .elevation_height = parameters.elevation_height,
+      .elevation_padding_3 = 0U,
       .bucket_size = bucket_size,
       .min_bound = {0.0F, 0.0F, 0.0F, 0.0F},
       .max_bound = max_bound};
@@ -150,8 +152,14 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
   CreateDensityDescriptorSets(vulkan_device, density_descriptor_allocator_);
   CreateDensityCommandBuffers(vulkan_device, command_pools);
 
-  elevation_texture_ = resources::ImageAllocator::CreateImage(
-      vulkan_device, command_pools, elevation_texture_filename_);
+  if (elevation_samples_ == nullptr || elevation_samples_->empty()) {
+    throw std::runtime_error("[ERROR] Simulation: Missing elevation samples!");
+  }
+
+  auto elevation_buffers = resources::BufferAllocator::CreateSSBO(
+      vulkan_device, command_pools, *elevation_samples_, false,
+      vk::BufferUsageFlagBits::eVertexBuffer);
+  elevation_buffer_ = std::move(elevation_buffers.front());
   CreateVelPosDescriptorSetLayout(vulkan_device);
   const std::array vel_pos_descriptor_pool_sizes = {
       resources::DescriptorAllocator::PoolSize{
@@ -159,7 +167,7 @@ void simulation::FluidSimulator::Init(core::VulkanDevice const& vulkan_device,
       resources::DescriptorAllocator::PoolSize{
           .type = vk::DescriptorType::eStorageBuffer, .count = 4},
       resources::DescriptorAllocator::PoolSize{
-          .type = vk::DescriptorType::eCombinedImageSampler, .count = 1}};
+          .type = vk::DescriptorType::eStorageBuffer, .count = 1}};
   vel_pos_descriptor_allocator_.Init(vulkan_device, 1,
                                      vel_pos_descriptor_pool_sizes);
   CreateVelPosPipeline(vulkan_device);
@@ -650,9 +658,9 @@ void simulation::FluidSimulator::CreateVelPosDescriptorSetLayout(
       vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, 1,
                                      vk::ShaderStageFlagBits::eCompute,
                                      nullptr),
-      vk::DescriptorSetLayoutBinding(
-          5, vk::DescriptorType::eCombinedImageSampler, 1,
-          vk::ShaderStageFlagBits::eCompute, nullptr)};
+      vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, 1,
+                                     vk::ShaderStageFlagBits::eCompute,
+                                     nullptr)};
 
   vk::DescriptorSetLayoutCreateInfo layout_info{
       .bindingCount = static_cast<uint32_t>(layout_bindings.size()),
@@ -703,10 +711,9 @@ void simulation::FluidSimulator::CreateVelPosDescriptorSets(
   vk::DescriptorBufferInfo bucket_buffer_info(
       bucket_buffer_.buffer, 0, sizeof(uint32_t) * bucket_.size());
 
-  vk::DescriptorImageInfo elevation_texture_info{
-      .sampler = elevation_texture_.sampler,
-      .imageView = elevation_texture_.image_view,
-      .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal};
+  vk::DescriptorBufferInfo elevation_buffer_info(
+      elevation_buffer_.buffer, 0,
+      sizeof(resources::Elevation) * elevation_samples_->size());
 
   std::array descriptor_writes{
       vk::WriteDescriptorSet{
@@ -759,8 +766,10 @@ void simulation::FluidSimulator::CreateVelPosDescriptorSets(
           .dstBinding = 5,
           .dstArrayElement = 0,
           .descriptorCount = 1,
-          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-          .pImageInfo = &elevation_texture_info},
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &elevation_buffer_info,
+          .pTexelBufferView = nullptr},
   };
 
   vulkan_device.Device().updateDescriptorSets(descriptor_writes, {});

@@ -12,6 +12,12 @@ find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
+find_package(GDAL REQUIRED)
+
+if(NOT GDAL_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GDAL REQUIRED gdal)
+endif()
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -89,6 +95,8 @@ target_sources(
         src/renderer/camera.h
         src/renderer/fluid_renderer.cpp
         src/renderer/fluid_renderer.h
+        src/renderer/terrain_renderer.cpp
+        src/renderer/terrain_renderer.h
         src/renderer/renderer.cpp
         src/renderer/renderer.h
         src/renderer/ui_texture_handle.h
@@ -96,8 +104,12 @@ target_sources(
         src/renderer/ui_texture_registry.h
         src/resources/buffer.cpp
         src/resources/buffer.h
+        src/resources/elevation.cpp
+        src/resources/elevation.h
         src/resources/descriptor.cpp
         src/resources/descriptor.h
+        src/resources/geotiff.cpp
+        src/resources/geotiff.h
         src/resources/immediate_submit.cpp
         src/resources/immediate_submit.h
         src/resources/images.cpp
@@ -119,7 +131,7 @@ target_sources(
 target_include_directories(${PROJECT_NAME} PRIVATE external)
 target_link_libraries(
     ${PROJECT_NAME}
-    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp
+    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp GDAL::GDAL
 )
 
 if(UNIX AND NOT APPLE)
@@ -170,10 +182,15 @@ compile_slang_shaders(particle_render_shader "shaders/graphics/particle.slang" "
         -entry vert_main
         -entry frag_main
 )
+compile_slang_shaders(terrain_render_shader "shaders/graphics/terrain.slang" "${SHADERS_DIR}/graphics" "${SHADERS_DIR}/graphics/terrain.spv"
+        -entry vert_main
+        -entry frag_main
+)
 add_dependencies(
     ${PROJECT_NAME}
     bucket_compute_shader
     density_compute_shader
     vel_pos_compute_shader
     particle_render_shader
+    terrain_render_shader
 )
