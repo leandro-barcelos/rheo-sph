@@ -97,14 +97,28 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
   if (intent.elevation_changed) {
     terrain_reinit_pending_ = true;
   }
+  if (intent.terrain_texture_changed) {
+    terrain_reinit_pending_ = true;
+  }
+  if (loaded_config) {
+    // Config load may include a terrain preview texture; reinitialize.
+    terrain_reinit_pending_ = true;
+  }
 
   // Re-initialize the terrain whenever elevation data changes (texture upload
   // or config load), independently of the fluid simulation.
   if (terrain_reinit_pending_ && built_parameters.has_value()) {
+    // Pass optional terrain preview texture path from the UI controller so the
+    // terrain renderer can bind it if present.
+    std::string const& terrain_path = ui_controller_.GetTerrainTexturePath();
+    std::optional<std::string> terrain_path_opt =
+      terrain_path.empty() ? std::nullopt : std::optional<std::string>(
+                      terrain_path);
     renderer_.InitTopViewCamera(built_parameters->elevation_samples);
     renderer_.InitTerrainRenderer(
-        vulkan_device_, vulkan_swap_chain_, built_parameters->elevation_samples,
-        built_parameters->elevation_width, built_parameters->elevation_height);
+      vulkan_device_, vulkan_swap_chain_, built_parameters->elevation_samples,
+      built_parameters->elevation_width, built_parameters->elevation_height,
+      terrain_path_opt);
     terrain_reinit_pending_ = false;
   }
 

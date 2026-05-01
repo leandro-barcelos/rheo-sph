@@ -69,6 +69,13 @@ class Renderer {
       std::shared_ptr<const std::vector<resources::Elevation>> const&
           elevation_samples,
       uint32_t elevation_width, uint32_t elevation_height);
+  void InitTerrainRenderer(
+      core::VulkanDevice const& vulkan_device,
+      core::VulkanSwapChain const& vulkan_swap_chain,
+      std::shared_ptr<const std::vector<resources::Elevation>> const&
+          elevation_samples,
+      uint32_t elevation_width, uint32_t elevation_height,
+      std::optional<std::string> const& terrain_texture_filepath);
 
   void Shutdown();
 

@@ -206,7 +206,22 @@ void Renderer::InitTerrainRenderer(
   if (command_pools_ != nullptr) {
     terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
                            elevation_samples, elevation_width,
-                           elevation_height);
+                           elevation_height, std::nullopt);
+    InitTopViewCamera(elevation_samples);
+  }
+}
+
+void Renderer::InitTerrainRenderer(
+    core::VulkanDevice const& vulkan_device,
+    core::VulkanSwapChain const& vulkan_swap_chain,
+    std::shared_ptr<const std::vector<resources::Elevation>> const&
+        elevation_samples,
+    uint32_t elevation_width, uint32_t elevation_height,
+    std::optional<std::string> const& terrain_texture_filepath) {
+  if (command_pools_ != nullptr) {
+    terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
+                           elevation_samples, elevation_width,
+                           elevation_height, terrain_texture_filepath);
     InitTopViewCamera(elevation_samples);
   }
 }

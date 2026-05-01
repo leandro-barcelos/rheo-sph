@@ -1,11 +1,15 @@
 #include "terrain_renderer.h"
 
 #include <cstdint>
+#include <optional>
 
 #include "../core/pipeline.h"
 #include "rheo-sph/src/core/command_pool.h"
+#include "rheo-sph/src/core/vulkan_device.h"
 #include "rheo-sph/src/resources/buffer.h"
+#include "rheo-sph/src/resources/descriptor.h"
 #include "rheo-sph/src/resources/elevation.h"
+#include "rheo-sph/src/resources/images.h"
 #include "vulkan/vulkan.hpp"
 
 void renderer::TerrainRenderer::Init(
@@ -14,7 +18,8 @@ void renderer::TerrainRenderer::Init(
     core::CommandPools const& command_pools,
     std::shared_ptr<const std::vector<resources::Elevation>> const&
         elevation_samples,
-    uint32_t elevation_width, uint32_t elevation_height) {
+    uint32_t elevation_width, uint32_t elevation_height,
+    std::optional<std::string> const& terrain_texture_filepath) {
   if (elevation_width < 2 || elevation_height < 2) {
     return;
   }
@@ -29,23 +34,36 @@ void renderer::TerrainRenderer::Init(
     indices_buffer_ = {};
     elevation_buffer_ = {};
     camera_ubo_buffer_ = {};
-    camera_descriptor_set_ = nullptr;
-    camera_descriptor_allocator_ = {};
-    camera_descriptor_set_layout_ = nullptr;
+    descriptor_set_ = nullptr;
+    descriptor_allocator_ = {};
+    descriptor_set_layout_ = nullptr;
     graphics_pipeline_ = nullptr;
     graphics_pipeline_layout_ = nullptr;
   }
 
-  CreateCameraDescriptorSetLayout(vulkan_device);
+  CreateDescriptorSetLayout(vulkan_device);
   const std::array camera_descriptor_pool_sizes = {
       resources::DescriptorAllocator::PoolSize{
-          .type = vk::DescriptorType::eUniformBuffer, .count = 1}};
-  camera_descriptor_allocator_.Init(vulkan_device, 1,
-                                    camera_descriptor_pool_sizes);
+          .type = vk::DescriptorType::eUniformBuffer, .count = 1},
+      resources::DescriptorAllocator::PoolSize{
+          .type = vk::DescriptorType::eCombinedImageSampler, .count = 1}};
+  descriptor_allocator_.Init(vulkan_device, 1, camera_descriptor_pool_sizes);
   CreateGraphicsPipeline(vulkan_device, vulkan_swap_chain);
   CreateIndices(elevation_width, elevation_height);
   CreateBuffers(vulkan_device, command_pools, elevation_samples);
-  CreateCameraDescriptorSet(vulkan_device, camera_descriptor_allocator_);
+  if (terrain_texture_filepath.has_value()) {
+    CreateImages(vulkan_device, command_pools,
+                 terrain_texture_filepath.value());
+    has_terrain_texture_ = true;
+  } else {
+    // Create a 1x1 fallback image so descriptor set always has a valid image.
+    terrain_texture_ =
+        resources::ImageAllocator::CreateSolidColorImage(vulkan_device,
+                                                         command_pools, 255,
+                                                         255, 255, 255);
+    has_terrain_texture_ = false;
+  }
+  CreateDescriptorSet(vulkan_device, descriptor_allocator_);
   is_initialized_ = true;
 }
 
@@ -62,7 +80,7 @@ void renderer::TerrainRenderer::Render(
                               *graphics_pipeline_);
   command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                     *graphics_pipeline_layout_, 0,
-                                    {*camera_descriptor_set_}, {});
+                                    {*descriptor_set_}, {});
   command_buffer.setViewport(
       0, vk::Viewport(0.0F, 0.0F,
                       static_cast<float>(vulkan_swap_chain.Extent().width),
@@ -88,7 +106,7 @@ void renderer::TerrainRenderer::CreateGraphicsPipeline(
       resources::Elevation::GetAttributeDescriptions();
 
   const std::array<vk::DescriptorSetLayout, 1> set_layouts = {
-      *camera_descriptor_set_layout_};
+      *descriptor_set_layout_};
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
       .setLayoutCount = static_cast<uint32_t>(set_layouts.size()),
       .pSetLayouts = set_layouts.data()};
@@ -105,20 +123,32 @@ void renderer::TerrainRenderer::CreateGraphicsPipeline(
       "shaders/graphics/terrain.spv", options);
 }
 
-void renderer::TerrainRenderer::CreateCameraDescriptorSetLayout(
+void renderer::TerrainRenderer::CreateDescriptorSetLayout(
     core::VulkanDevice const& vulkan_device) {
   vk::DescriptorSetLayoutBinding ubo_layout_binding{
-      .binding = 0,
-      .descriptorType = vk::DescriptorType::eUniformBuffer,
-      .descriptorCount = 1,
-      .stageFlags = vk::ShaderStageFlagBits::eVertex,
-      .pImmutableSamplers = nullptr};
+    .binding = 0,
+    .descriptorType = vk::DescriptorType::eUniformBuffer,
+    .descriptorCount = 1,
+    .stageFlags = static_cast<vk::ShaderStageFlags>(
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment),
+    .pImmutableSamplers = nullptr};
+
+  vk::DescriptorSetLayoutBinding sampler_layout_binding{
+    .binding = 1,
+    .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+    .descriptorCount = 1,
+    .stageFlags = vk::ShaderStageFlagBits::eFragment,
+    .pImmutableSamplers = nullptr};
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {
+    ubo_layout_binding, sampler_layout_binding};
 
   vk::DescriptorSetLayoutCreateInfo layout_info{
-      .bindingCount = 1, .pBindings = &ubo_layout_binding};
+    .bindingCount = static_cast<uint32_t>(bindings.size()),
+    .pBindings = bindings.data()};
 
-  camera_descriptor_set_layout_ =
-      vulkan_device.Device().createDescriptorSetLayout(layout_info);
+  descriptor_set_layout_ =
+    vulkan_device.Device().createDescriptorSetLayout(layout_info);
 }
 
 void renderer::TerrainRenderer::CreateBuffers(
@@ -144,25 +174,44 @@ void renderer::TerrainRenderer::CreateBuffers(
                     .front());
 }
 
-void renderer::TerrainRenderer::CreateCameraDescriptorSet(
+void renderer::TerrainRenderer::CreateImages(
+    core::VulkanDevice const& vulkan_device,
+    core::CommandPools const& command_pools,
+    std::string const& terrain_texture_filepath) {
+  terrain_texture_ = resources::ImageAllocator::CreateImage(
+      vulkan_device, command_pools, terrain_texture_filepath);
+}
+
+void renderer::TerrainRenderer::CreateDescriptorSet(
     core::VulkanDevice const& vulkan_device,
     resources::DescriptorAllocator const& descriptor_allocator) {
-  camera_descriptor_set_ = descriptor_allocator.Allocate(
-      vulkan_device, camera_descriptor_set_layout_);
+  descriptor_set_ =
+      descriptor_allocator.Allocate(vulkan_device, descriptor_set_layout_);
 
   vk::DescriptorBufferInfo camera_buffer_info(camera_ubo_buffer_.buffer, 0,
                                               sizeof(CameraUBO));
+  vk::DescriptorImageInfo terrain_texture_info(
+    terrain_texture_.sampler, terrain_texture_.image_view,
+    vk::ImageLayout::eShaderReadOnlyOptimal);
 
-  vk::WriteDescriptorSet descriptor_write{
-      .dstSet = *camera_descriptor_set_,
-      .dstBinding = 0,
-      .dstArrayElement = 0,
-      .descriptorCount = 1,
-      .descriptorType = vk::DescriptorType::eUniformBuffer,
-      .pBufferInfo = &camera_buffer_info};
+  std::vector<vk::WriteDescriptorSet> descriptor_writes;
+  descriptor_writes.push_back(vk::WriteDescriptorSet{
+    .dstSet = *descriptor_set_,
+    .dstBinding = 0,
+    .dstArrayElement = 0,
+    .descriptorCount = 1,
+    .descriptorType = vk::DescriptorType::eUniformBuffer,
+    .pBufferInfo = &camera_buffer_info});
 
-  vulkan_device.Device().updateDescriptorSets(
-      vk::ArrayProxy<const vk::WriteDescriptorSet>(descriptor_write), {});
+  descriptor_writes.push_back(vk::WriteDescriptorSet{
+    .dstSet = *descriptor_set_,
+    .dstBinding = 1,
+    .dstArrayElement = 0,
+    .descriptorCount = 1,
+    .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+    .pImageInfo = &terrain_texture_info});
+
+  vulkan_device.Device().updateDescriptorSets(descriptor_writes, {});
 }
 
 void renderer::TerrainRenderer::UpdateUniformBuffer(
@@ -174,7 +223,8 @@ void renderer::TerrainRenderer::UpdateUniformBuffer(
 
   CameraUBO camera_ubo{.model = {1.0F},
                        .view = camera.ViewMatrix(),
-                       .proj = camera.ProjectionMatrix(aspect_ratio)};
+                       .proj = camera.ProjectionMatrix(aspect_ratio),
+                       .has_terrain_texture = has_terrain_texture_ ? 1U : 0U};
   camera_ubo.proj[1][1] *= -1;
 
   resources::BufferAllocator::WriteMapped(camera_ubo_buffer_, &camera_ubo,
