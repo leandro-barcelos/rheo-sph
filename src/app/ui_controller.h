@@ -20,22 +20,28 @@
 
 namespace app {
 
+struct LoadedConfig {
+  ui::ParametersPanel::Values panel_values;
+  std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
+  std::array<uint32_t, 2> elevation_dimensions{0U, 0U};
+  std::string elevation_texture_path;
+  std::string terrain_texture_path;
+} __attribute__((packed));
+
 // NOLINTNEXTLINE(altera-struct-pack-align) - packing is not desirable here.
 struct UiIntent {
   enum class SimAction : std::uint8_t { kNone, kPlay, kPause, kReset };
+  std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
+  std::array<uint32_t, 2> elevation_dimensions{0U, 0U};
+  std::string dem_texture_path;
+  std::string visualization_texture_path;
 
   std::optional<simulation::FluidSimulator::Parameters> built_parameters;
-  std::optional<std::string> new_texture_path;
-  std::optional<std::string> new_terrain_texture_path;
   std::optional<std::string> save_path;
   std::optional<std::string> load_path;
   SimAction sim_action = SimAction::kNone;
   bool parameters_changed = false;
-  // True when elevation data changed (new texture uploaded or config loaded)
-  // and the terrain renderer should be re-initialized.
   bool elevation_changed = false;
-  // True when terrain preview texture changed and the terrain renderer should
-  // be re-initialized to show the texture.
   bool terrain_texture_changed = false;
 };
 
@@ -44,13 +50,9 @@ class UiController {
   [[nodiscard]] UiIntent Draw(bool simulation_running);
 
   [[nodiscard]] bool SaveSimulationConfig(std::string const& path);
-  [[nodiscard]] bool LoadSimulationConfig(std::string const& path);
-  [[nodiscard]] std::optional<simulation::FluidSimulator::Parameters>
-  BuildParameters() const;
-  [[nodiscard]] std::string const& GetElevationTexturePath() const;
-  [[nodiscard]] std::string const& GetTerrainTexturePath() const;
-
-  [[nodiscard]] ui::ParametersPanel::Values const& GetParameterValues() const;
+  // Returns nullopt on failure
+  [[nodiscard]] static std::optional<LoadedConfig> LoadSimulationConfig(
+      std::string const& path);
 
  private:
   ui::ParametersPanel parameters_panel_;

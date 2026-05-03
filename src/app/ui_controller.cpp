@@ -198,8 +198,10 @@ UiIntent UiController::Draw(bool simulation_running) {
       pending_elevation_texture_path_ = *menu_events.uploaded_dem_texture_path;
       parameters_panel_.SetDEMTexturePath(
           *menu_events.uploaded_dem_texture_path);
-      intent.new_texture_path = *menu_events.uploaded_dem_texture_path;
       intent.elevation_changed = true;
+      intent.elevation_samples = pending_elevation_samples_;
+      intent.elevation_dimensions = pending_elevation_dimensions_;
+      intent.dem_texture_path = pending_elevation_texture_path_;
     }
     intent.parameters_changed = true;
   }
@@ -211,9 +213,8 @@ UiIntent UiController::Draw(bool simulation_running) {
     parameters_panel_.SetVisualizationTexturePath(
         *menu_events.uploaded_visualization_texture_path);
     intent.parameters_changed = true;
-    intent.new_terrain_texture_path =
-        *menu_events.uploaded_visualization_texture_path;
     intent.terrain_texture_changed = true;
+    intent.visualization_texture_path = pending_terrain_texture_path_;
   }
 
   if (menu_events.save_simulation_path.has_value() &&
@@ -228,6 +229,31 @@ UiIntent UiController::Draw(bool simulation_running) {
     std::string const load_path =
         EnsureYamlExtension(*menu_events.load_simulation_path);
     intent.load_path = load_path;
+  }
+
+  if (intent.load_path.has_value()) {
+    auto loaded = LoadSimulationConfig(*intent.load_path);
+    if (loaded) {
+      // Update panel + pending state here
+      parameters_panel_.SetValues(loaded->panel_values);
+      pending_elevation_samples_ = loaded->elevation_samples;
+      pending_elevation_dimensions_ = loaded->elevation_dimensions;
+      pending_elevation_texture_path_ = loaded->elevation_texture_path;
+      pending_terrain_texture_path_ = loaded->terrain_texture_path;
+      parameters_panel_.SetDEMTexturePath(loaded->elevation_texture_path);
+      parameters_panel_.SetVisualizationTexturePath(
+          loaded->terrain_texture_path);
+      parameters_panel_.SetSimulationConfigPath(*intent.load_path);
+
+      intent.elevation_changed = true;
+      intent.terrain_texture_changed = !loaded->terrain_texture_path.empty();
+      intent.elevation_samples = pending_elevation_samples_;
+      intent.elevation_dimensions = pending_elevation_dimensions_;
+      intent.dem_texture_path = pending_elevation_texture_path_;
+      intent.visualization_texture_path = pending_terrain_texture_path_;
+      intent.sim_action = UiIntent::SimAction::kPause;
+      intent.parameters_changed = true;
+    }
   }
 
   if (parameters_changed) {
@@ -277,25 +303,25 @@ bool UiController::SaveSimulationConfig(std::string const& path) {
   }
 }
 
-bool UiController::LoadSimulationConfig(std::string const& path) {
+std::optional<LoadedConfig> UiController::LoadSimulationConfig(
+    std::string const& path) {
   try {
     YAML::Node const root = YAML::LoadFile(path);
-    YAML::Node const parameters_node = root
-        ["parameters"];  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    YAML::Node const parameters_node = root["parameters"];  // NOLINT
     if (!parameters_node || !parameters_node.IsMap()) {
-      return false;
+      return std::nullopt;
     }
 
     ui::ParametersPanel::Values const values =
         DeserializeParametersPanelValues(parameters_node);
 
     std::string const texture_path =
-        root["elevation_texture_path"]  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        root["elevation_texture_path"]
             ? root["elevation_texture_path"].as<std::string>()
             : std::string{};
 
     std::string const terrain_texture_path =
-        root["terrain_texture_path"]  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        root["terrain_texture_path"]
             ? root["terrain_texture_path"].as<std::string>()
             : std::string{};
 
@@ -304,41 +330,19 @@ bool UiController::LoadSimulationConfig(std::string const& path) {
     if (!LoadElevationSamples(texture_path, elevation_samples,
                               elevation_dimensions,
                               values.dem_resolution.value_or(10.0F))) {
-      return false;
+      return std::nullopt;
     }
 
-    parameters_panel_.SetValues(values);
-    pending_elevation_texture_path_ = texture_path;
-    pending_elevation_samples_ = std::move(elevation_samples);
-    pending_elevation_dimensions_ = elevation_dimensions;
-    parameters_panel_.SetDEMTexturePath(texture_path);
-    pending_terrain_texture_path_ = terrain_texture_path;
-    parameters_panel_.SetVisualizationTexturePath(terrain_texture_path);
-    parameters_panel_.SetSimulationConfigPath(path);
-
-    return true;
+    LoadedConfig result;
+    result.panel_values = values;
+    result.elevation_samples = std::move(elevation_samples);
+    result.elevation_dimensions = elevation_dimensions;
+    result.elevation_texture_path = texture_path;
+    result.terrain_texture_path = terrain_texture_path;
+    return result;
   } catch (std::exception const&) {
-    return false;
+    return std::nullopt;
   }
-}
-
-std::optional<simulation::FluidSimulator::Parameters>
-UiController::BuildParameters() const {
-  return BuildSimulationParameters(
-      parameters_panel_.GetValues(), pending_elevation_texture_path_,
-      pending_elevation_samples_, pending_elevation_dimensions_);
-}
-
-std::string const& UiController::GetElevationTexturePath() const {
-  return pending_elevation_texture_path_;
-}
-
-std::string const& UiController::GetTerrainTexturePath() const {
-  return pending_terrain_texture_path_;
-}
-
-ui::ParametersPanel::Values const& UiController::GetParameterValues() const {
-  return parameters_panel_.GetValues();
 }
 
 }  // namespace app

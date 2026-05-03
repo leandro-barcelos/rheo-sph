@@ -36,7 +36,6 @@ class RheoSPHApp {
   renderer::Renderer renderer_;
   SimulationSession session_;
   UiController ui_controller_;
-  bool terrain_reinit_pending_ = false;
   double last_time_ = 0;
   double delta_time_ = 0;
 };

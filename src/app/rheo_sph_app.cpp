@@ -82,57 +82,44 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
     (void)ui_controller_.SaveSimulationConfig(*intent.save_path);
   }
 
-  bool loaded_config = false;
-  if (intent.load_path.has_value()) {
-    loaded_config = ui_controller_.LoadSimulationConfig(*intent.load_path);
-    if (loaded_config) {
-      session_.Pause();
+  // Reinitialize terrain when elevation data changed (upload or load)
+  if (intent.elevation_changed && intent.elevation_samples != nullptr) {
+    renderer_.InitTopViewCamera(intent.elevation_samples);
+    std::optional<std::string> terrain_path_opt =
+        intent.visualization_texture_path.empty()
+            ? std::nullopt
+            : std::optional<std::string>(intent.visualization_texture_path);
+    renderer_.InitTerrainRenderer(
+        vulkan_device_, vulkan_swap_chain_, intent.elevation_samples,
+        intent.elevation_dimensions[0], intent.elevation_dimensions[1],
+        terrain_path_opt);
+  } else if (intent.terrain_texture_changed) {
+    // Terrain texture changed but elevation didn't — reinit with current data
+    if (intent.built_parameters.has_value()) {
+      auto const& built_parameters = *intent.built_parameters;
+      renderer_.InitTopViewCamera(built_parameters.elevation_samples);
+      std::optional<std::string> terrain_path_opt =
+          intent.visualization_texture_path.empty()
+              ? std::nullopt
+              : std::optional<std::string>(intent.visualization_texture_path);
+      renderer_.InitTerrainRenderer(
+          vulkan_device_, vulkan_swap_chain_,
+          built_parameters.elevation_samples, built_parameters.elevation_width,
+          built_parameters.elevation_height, terrain_path_opt);
     }
   }
 
-  std::optional<simulation::FluidSimulator::Parameters> built_parameters =
-      loaded_config ? ui_controller_.BuildParameters()
-                    : intent.built_parameters;
-
-  if (intent.elevation_changed) {
-    terrain_reinit_pending_ = true;
-  }
-  if (intent.terrain_texture_changed) {
-    terrain_reinit_pending_ = true;
-  }
-  if (loaded_config) {
-    // Config load may include a terrain preview texture; reinitialize.
-    terrain_reinit_pending_ = true;
-  }
-
-  // Re-initialize the terrain whenever elevation data changes (texture upload
-  // or config load), independently of the fluid simulation.
-  if (terrain_reinit_pending_ && built_parameters.has_value()) {
-    // Pass optional terrain preview texture path from the UI controller so the
-    // terrain renderer can bind it if present.
-    std::string const& terrain_path = ui_controller_.GetTerrainTexturePath();
-    std::optional<std::string> terrain_path_opt =
-        terrain_path.empty() ? std::nullopt
-                             : std::optional<std::string>(terrain_path);
-    renderer_.InitTopViewCamera(built_parameters->elevation_samples);
-    renderer_.InitTerrainRenderer(
-        vulkan_device_, vulkan_swap_chain_, built_parameters->elevation_samples,
-        built_parameters->elevation_width, built_parameters->elevation_height,
-        terrain_path_opt);
-    terrain_reinit_pending_ = false;
-  }
-
   // Apply fluid simulation parameters when they change.
-  if ((intent.parameters_changed || loaded_config) &&
-      built_parameters.has_value()) {
-    session_.ApplyParameters(*built_parameters, vulkan_device_, command_pools_);
+  if (intent.parameters_changed && intent.built_parameters.has_value()) {
+    session_.ApplyParameters(*intent.built_parameters, vulkan_device_,
+                             command_pools_);
   }
 
   switch (intent.sim_action) {
     case UiIntent::SimAction::kNone:
       break;
     case UiIntent::SimAction::kPlay:
-      if (built_parameters.has_value()) {
+      if (intent.built_parameters.has_value()) {
         session_.Play();
       }
       break;
@@ -140,7 +127,7 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       session_.Pause();
       break;
     case UiIntent::SimAction::kReset:
-      if (built_parameters.has_value()) {
+      if (intent.built_parameters.has_value()) {
         session_.Reset(vulkan_device_, command_pools_);
       }
       break;
