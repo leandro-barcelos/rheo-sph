@@ -34,7 +34,7 @@ resources::GeoTiff::~GeoTiff() {
 }
 
 std::vector<resources::Elevation> resources::GeoTiff::Elevations(
-    int layer, float resolution_meters) { // NOLINT(bugprone-easily-swappable-parameters)
+    int layer, float resolution_meters) {
   if (geotiff_dataset_ == nullptr) {
     return {};
   }
