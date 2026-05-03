@@ -3,10 +3,8 @@
 
 namespace ui {
 
-class TopBarPanel {
+class ControlPanel {
  public:
-  static constexpr float kToolbarHeight = 30.0F;
-
   struct alignas(4) Events {
     bool play_pressed = false;
     bool pause_pressed = false;

@@ -14,8 +14,8 @@
 
 #include "../resources/geotiff.h"
 #include "../simulation/fluid_simulator.h"
+#include "../ui/panels/control_panel.h"
 #include "../ui/panels/parameters_panel.h"
-#include "../ui/panels/top_bar_panel.h"
 
 namespace {
 
@@ -239,8 +239,8 @@ UiIntent UiController::Draw(bool simulation_running) {
       pending_elevation_samples_, pending_elevation_dimensions_);
   bool const can_play = intent.built_parameters.has_value();
 
-  ui::TopBarPanel::Events const top_bar_events =
-      ui::TopBarPanel::Draw(simulation_running, can_play);
+  ui::ControlPanel::Events const top_bar_events =
+      ui::ControlPanel::Draw(simulation_running, can_play);
   if (top_bar_events.play_pressed) {
     intent.sim_action = UiIntent::SimAction::kPlay;
   } else if (top_bar_events.pause_pressed) {
