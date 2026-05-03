@@ -33,8 +33,6 @@ struct UniformBuffer {
   float viscosity;
   float gas_constant;
   float damping_coefficient;
-  float min_elevation;
-  float max_elevation;
   float mu;
   float yield_stress;
   uint elevation_width;
@@ -151,7 +149,7 @@ float sample_elevation(uint x, uint y) {
 
 float get_elevation(float3 pos) {
   if (ubo.elevation_width == 0 || ubo.elevation_height == 0) {
-    return ubo.min_elevation;
+    return 0;
   }
 
   // Convert world position to UV coordinates (0-1 range)

@@ -9,9 +9,7 @@
 #include <vector>
 
 #include "../resources/elevation.h"
-#include "../renderer/ui_texture_handle.h"
 #include "../simulation/fluid_simulator.h"
-#include "../ui/panels/menu_bar_panel.h"
 #include "../ui/panels/parameters_panel.h"
 
 // X11 headers (pulled in by GLFW on Linux) may define `None` as a macro.
@@ -47,22 +45,20 @@ class UiController {
 
   [[nodiscard]] bool SaveSimulationConfig(std::string const& path);
   [[nodiscard]] bool LoadSimulationConfig(std::string const& path);
-  [[nodiscard]] std::optional<simulation::FluidSimulator::Parameters> BuildParameters() const;
+  [[nodiscard]] std::optional<simulation::FluidSimulator::Parameters>
+  BuildParameters() const;
   [[nodiscard]] std::string const& GetElevationTexturePath() const;
   [[nodiscard]] std::string const& GetTerrainTexturePath() const;
 
-  void NotifyTextureLoaded(renderer::UiTextureHandle handle, void* imgui_id);
-  void ClearTexturePreview();
-  void ClearTerrainPreviewTexture();
   [[nodiscard]] ui::ParametersPanel::Values const& GetParameterValues() const;
 
  private:
   ui::ParametersPanel parameters_panel_;
   std::string pending_elevation_texture_path_;
   std::string pending_terrain_texture_path_;
-  std::shared_ptr<const std::vector<resources::Elevation>> pending_elevation_samples_;
+  std::shared_ptr<const std::vector<resources::Elevation>>
+      pending_elevation_samples_;
   std::array<uint32_t, 2> pending_elevation_dimensions_{0U, 0U};
-  ui::MenuBarPanel menu_bar_panel_;
 };
 
 }  // namespace app

@@ -26,8 +26,6 @@ struct UniformBuffer {
   float viscosity;
   float gas_constant;
   float damping_coefficient;
-  float min_elevation;
-  float max_elevation;
   float mu;
   float yield_stress;
   uint elevation_width;

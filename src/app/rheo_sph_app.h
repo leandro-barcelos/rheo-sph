@@ -1,9 +1,6 @@
 #ifndef RHEOSPH_APP_H
 #define RHEOSPH_APP_H
 
-#include <memory>
-#include <string>
-
 #include "../core/command_pool.h"
 #include "../core/frame_sync.h"
 #include "../core/vulkan_context.h"
@@ -39,7 +36,6 @@ class RheoSPHApp {
   renderer::Renderer renderer_;
   SimulationSession session_;
   UiController ui_controller_;
-  renderer::UiTextureHandle elevation_preview_texture_{};
   bool terrain_reinit_pending_ = false;
   double last_time_ = 0;
   double delta_time_ = 0;

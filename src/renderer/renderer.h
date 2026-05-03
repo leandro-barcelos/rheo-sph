@@ -22,7 +22,6 @@
 #include "rheo-sph/src/core/input_events.h"
 #include "rheo-sph/src/renderer/camera.h"
 #include "terrain_renderer.h"
-#include "ui_texture_handle.h"
 
 namespace renderer {
 
@@ -41,18 +40,6 @@ class Renderer {
                    uint32_t image_index, core::Window const& window,
                    std::optional<uint64_t> simulation_signal_value);
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
-
-  [[nodiscard]] UiTextureHandle AddUiTexture(vk::Sampler sampler,
-                                             vk::ImageView image_view,
-                                             vk::ImageLayout image_layout);
-  void RemoveUiTexture(UiTextureHandle handle);
-
-  [[nodiscard]] UiTextureHandle LoadUiTexture(
-      std::string const& path, core::VulkanDevice const& vulkan_device,
-      core::CommandPools const& command_pools);
-  void UnloadUiTexture(UiTextureHandle handle);
-
-  [[nodiscard]] void* ResolveImGuiTextureId(UiTextureHandle handle) const;
 
   void ProcessInput(core::WindowSize const& window_size,
                     core::InputEvent const& events);

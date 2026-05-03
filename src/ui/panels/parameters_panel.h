@@ -3,17 +3,23 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace ui {
 
 class ParametersPanel {
  public:
+  struct Events {
+    std::optional<std::string> uploaded_dem_texture_path;
+    std::optional<std::string> uploaded_visualization_texture_path;
+    std::optional<std::string> save_simulation_path;
+    std::optional<std::string> load_simulation_path;
+  } __attribute__((aligned(128)));
+
   struct Values {
     std::optional<float> total_fluid_volume;
-    std::optional<float> min_elevation;
-    std::optional<float> max_elevation;
     std::optional<float> initial_particle_spacing;
-    std::optional<float> elevation_resolution_meters;
+    std::optional<float> dem_resolution;
     std::optional<uint32_t> voxel_max_particles;
     std::optional<float> viscosity;
     std::optional<float> rest_density;
@@ -27,21 +33,30 @@ class ParametersPanel {
 
   [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
-  [[nodiscard]] Values const& GetValues() const;
-  void SetValues(Values const& values);
+
+  [[nodiscard]] Values const& GetValues() const { return values_; }
+  void SetValues(Values const& values) { values_ = values; }
+  [[nodiscard]] Events const& GetEvents() const { return events_; }
+  void SetEvents(Events const& events) { events_ = events; }
+  void ClearEvents() { events_ = Events{}; }
+  void SetDEMTexturePath(std::string const& path) { dem_texture_path_ = path; }
+  void SetSimulationConfigPath(std::string const& path) {
+    simulation_config_path_ = path;
+  }
+  void SetVisualizationTexturePath(std::string const& path) {
+    visualization_texture_path_ = path;
+  }
 
  private:
-  static bool DrawOptionalInputFloat(char const* label,
-                                     std::optional<float>& value,
-                                     float step = 1.0F);
-  static bool DrawOptionalSliderFloat(char const* label,
-                                      std::optional<float>& value,
-                                      float min_value, float max_value);
-  static bool DrawOptionalSliderUInt(char const* label,
-                                     std::optional<uint32_t>& value,
-                                     uint32_t min_value, uint32_t max_value);
-
+  Events events_{};
   Values values_{};
+  std::string dem_texture_path_;
+  std::string visualization_texture_path_;
+  std::string simulation_config_path_;
+
+  void MenuBar();
+  [[nodiscard]] bool ParametersInput();
+  void DisplayFileDialogs();
 };
 
 }  // namespace ui

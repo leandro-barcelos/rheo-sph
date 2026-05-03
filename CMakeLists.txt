@@ -99,9 +99,6 @@ target_sources(
         src/renderer/terrain_renderer.h
         src/renderer/renderer.cpp
         src/renderer/renderer.h
-        src/renderer/ui_texture_handle.h
-        src/renderer/ui_texture_registry.cpp
-        src/renderer/ui_texture_registry.h
         src/resources/buffer.cpp
         src/resources/buffer.h
         src/resources/elevation.cpp
@@ -120,8 +117,6 @@ target_sources(
         src/simulation/fluid_simulator.h
         src/ui/imgui_layer.cpp
         src/ui/imgui_layer.h
-        src/ui/panels/menu_bar_panel.cpp
-        src/ui/panels/menu_bar_panel.h
         src/ui/panels/parameters_panel.cpp
         src/ui/panels/parameters_panel.h
         src/ui/panels/top_bar_panel.cpp

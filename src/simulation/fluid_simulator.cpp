@@ -107,8 +107,6 @@ simulation::FluidSimulator::FluidSimulator(Parameters const& parameters)
       .gas_constant = parameters.gas_constant,
       .damping_coefficient =
           DampingCoefficient(parameters.coefficient_of_restitution),
-      .min_elevation = parameters.min_elevation,
-      .max_elevation = parameters.max_elevation,
       .mu = parameters.friction,
       .yield_stress = parameters.yield_stress,
       .elevation_width = parameters.elevation_width,

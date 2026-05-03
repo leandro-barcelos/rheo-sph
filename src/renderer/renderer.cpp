@@ -123,56 +123,6 @@ void Renderer::OnSwapChainRecreated(
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
 }
 
-UiTextureHandle Renderer::AddUiTexture(vk::Sampler sampler,
-                                       vk::ImageView image_view,
-                                       vk::ImageLayout image_layout) {
-  return imgui_layer_.AddTexture(sampler, image_view, image_layout);
-}
-
-void Renderer::RemoveUiTexture(UiTextureHandle handle) {
-  if (!handle.IsValid()) {
-    return;
-  }
-
-  imgui_layer_.RemoveTexture(handle);
-}
-
-UiTextureHandle Renderer::LoadUiTexture(
-    std::string const& path, core::VulkanDevice const& vulkan_device,
-    core::CommandPools const& command_pools) {
-  resources::AllocatedImage image = resources::ImageAllocator::CreateImage(
-      vulkan_device, command_pools, path);
-
-  UiTextureHandle const handle =
-      AddUiTexture(*image.sampler, *image.image_view,
-                   vk::ImageLayout::eShaderReadOnlyOptimal);
-  if (!handle.IsValid()) {
-    return kNullUiTexture;
-  }
-
-  ui_textures_.emplace(handle.id, std::move(image));
-  return handle;
-}
-
-void Renderer::UnloadUiTexture(UiTextureHandle handle) {
-  if (!handle.IsValid()) {
-    return;
-  }
-
-  auto iter = ui_textures_.find(handle.id);
-  if (iter == ui_textures_.end()) {
-    RemoveUiTexture(handle);
-    return;
-  }
-
-  RemoveUiTexture(handle);
-  ui_textures_.erase(iter);
-}
-
-void* Renderer::ResolveImGuiTextureId(UiTextureHandle handle) const {
-  return imgui_layer_.ResolveImGuiTextureId(handle);
-}
-
 void Renderer::ProcessInput(core::WindowSize const& window_size,
                             core::InputEvent const& events) {
   bool ignore_mouse_events = ImGui::GetIO().WantCaptureMouse;
@@ -205,8 +155,8 @@ void Renderer::InitTerrainRenderer(
     uint32_t elevation_width, uint32_t elevation_height) {
   if (command_pools_ != nullptr) {
     terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
-                           elevation_samples, elevation_width,
-                           elevation_height, std::nullopt);
+                           elevation_samples, elevation_width, elevation_height,
+                           std::nullopt);
     InitTopViewCamera(elevation_samples);
   }
 }
@@ -220,8 +170,8 @@ void Renderer::InitTerrainRenderer(
     std::optional<std::string> const& terrain_texture_filepath) {
   if (command_pools_ != nullptr) {
     terrain_renderer_.Init(vulkan_device, vulkan_swap_chain, *command_pools_,
-                           elevation_samples, elevation_width,
-                           elevation_height, terrain_texture_filepath);
+                           elevation_samples, elevation_width, elevation_height,
+                           terrain_texture_filepath);
     InitTopViewCamera(elevation_samples);
   }
 }

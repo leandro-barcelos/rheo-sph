@@ -33,13 +33,12 @@ class FluidSimulator {
     std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
     uint32_t elevation_width;
     uint32_t elevation_height;
-    float min_elevation;
-    float max_elevation;
     float friction;
     float yield_stress;
     float initial_particle_spacing;
-  } __attribute__((aligned(128)));
+  } __attribute__((aligned(64)));
 
+  // TODO: Verificar se o alinhamento foi alterado
   struct UniformBufferObject {  // NOLINT(altera-struct-pack-align)
     uint32_t voxel_max_particles;
     uint32_t fluid_particle_count;
@@ -54,8 +53,6 @@ class FluidSimulator {
     float viscosity;
     float gas_constant;
     float damping_coefficient;
-    float min_elevation;
-    float max_elevation;
     float mu;
     float yield_stress;
     uint32_t elevation_width;
@@ -209,12 +206,6 @@ class FluidSimulator {
 }  // namespace simulation
 
 static_assert(sizeof(simulation::FluidSimulator::UniformBufferObject) == 128);
-static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
-                       bucket_size) == 80);
-static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
-                       min_bound) == 96);
-static_assert(offsetof(simulation::FluidSimulator::UniformBufferObject,
-                       max_bound) == 112);
 static_assert(sizeof(simulation::FluidSimulator::FluidParticle) == 80);
 static_assert(sizeof(simulation::FluidSimulator::WallParticle) == 16);
 

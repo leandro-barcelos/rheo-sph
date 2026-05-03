@@ -1,118 +1,41 @@
 #include "parameters_panel.h"
 
-#include <cstdint>
-#include <string>
+#include <filesystem>
 
+#include "ImGuiFileDialog.h"
 #include "imgui.h"
 
 namespace {
-
-void DrawFieldLabel(char const* label, bool is_set) {
-  if (is_set) {
-    ImGui::TextUnformatted(label);
-    return;
-  }
-
-  ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
-  ImGui::TextUnformatted(label);
-  ImGui::PopStyleColor();
-}
-
+constexpr const char* kUploadDialogKey = "UploadElevationTextureDialog";
+constexpr const char* kUploadTerrainDialogKey = "UploadTerrainTextureDialog";
+constexpr const char* kSaveSimulationDialogKey = "SaveSimulationDialog";
+constexpr const char* kLoadSimulationDialogKey = "LoadSimulationDialog";
 }  // namespace
 
-bool ui::ParametersPanel::DrawOptionalInputFloat(char const* label,
-                                                 std::optional<float>& value,
-                                                 float step) {
-  std::string const input_id = std::string("##") + label;
-  DrawFieldLabel(label, value.has_value());
-  float current_value = value.value_or(0.0F);
-  bool const changed =
-      ImGui::InputFloat(input_id.c_str(), &current_value, step);
-  if (changed) {
-    value = current_value;
-  }
-  return changed;
-}
-
-bool ui::ParametersPanel::DrawOptionalSliderFloat(char const* label,
-                                                  std::optional<float>& value,
-                                                  float min_value,
-                                                  float max_value) {
-  std::string const input_id = std::string("##") + label;
-  DrawFieldLabel(label, value.has_value());
-  float current_value = value.value_or(min_value);
-  bool const changed = ImGui::SliderFloat(input_id.c_str(), &current_value,
-                                          min_value, max_value, "%.3f");
-  if (changed || ImGui::IsItemActivated()) {
-    value = current_value;
-  }
-  return changed;
-}
-
-bool ui::ParametersPanel::DrawOptionalSliderUInt(char const* label,
-                                                 std::optional<uint32_t>& value,
-                                                 uint32_t min_value,
-                                                 uint32_t max_value) {
-  std::string const input_id = std::string("##") + label;
-  DrawFieldLabel(label, value.has_value());
-  int current_value = static_cast<int>(value.value_or(min_value));
-  bool const changed = ImGui::SliderInt(input_id.c_str(), &current_value,
-                                        static_cast<int>(min_value),
-                                        static_cast<int>(max_value));
-  if (changed || ImGui::IsItemActivated()) {
-    value = static_cast<uint32_t>(current_value);
-  }
-  return changed;
-}
-
 bool ui::ParametersPanel::Draw() {
-  bool changed = false;
-
   ImGui::SetNextWindowPos(ImVec2(12.0F, 90.0F), ImGuiCond_FirstUseEver);
 
-  ImGuiWindowFlags const window_flags = ImGuiWindowFlags_NoDocking;
+  ImGuiWindowFlags const window_flags =
+      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_MenuBar;
 
-  if (ImGui::Begin("Parameters", nullptr, window_flags)) {
-    changed |= DrawOptionalInputFloat("Total fluid volume",
-                                      values_.total_fluid_volume, 1000.0F);
-    changed |= DrawOptionalInputFloat("Minimum elevation",
-                                      values_.min_elevation, 1.0F);
-    changed |= DrawOptionalInputFloat("Maximum elevation",
-                                      values_.max_elevation, 1.0F);
-
-    changed |= DrawOptionalInputFloat(
-        "Elevation resolution (m)", values_.elevation_resolution_meters, 1.0F);
-
-    ImGui::Separator();
-
-    changed |=
-        DrawOptionalSliderFloat("Initial particle spacing",
-                                values_.initial_particle_spacing, 0.01F, 20.0F);
-    changed |= DrawOptionalSliderUInt("Particles per voxel",
-                                      values_.voxel_max_particles, 1, 32);
-    changed |=
-        DrawOptionalSliderFloat("Viscosity", values_.viscosity, 0.0F, 5000.0F);
-    changed |= DrawOptionalSliderFloat("Rest density", values_.rest_density,
-                                       0.0F, 5000.0F);
-    changed |= DrawOptionalSliderFloat("Gas constant", values_.gas_constant,
-                                       1.0F, 1000.0F);
-    changed |= DrawOptionalSliderFloat("Coefficient of restitution",
-                                       values_.coefficient_of_restitution,
-                                       0.2F / 3.0F, 1.0F);
-    changed |=
-        DrawOptionalSliderFloat("Friction", values_.friction, 0.001F, 5.0F);
-    changed |= DrawOptionalSliderFloat("Yield-stress", values_.yield_stress,
-                                       0.0F, 1000.0F);
+  bool opened = true;
+  if (!ImGui::Begin("RheoSPH - Simulation Settings", &opened, window_flags)) {
+    ImGui::End();
+    return false;
   }
+
+  MenuBar();
+  bool changed = ParametersInput();
+
   ImGui::End();
+
+  DisplayFileDialogs();
 
   return changed;
 }
 
 bool ui::ParametersPanel::AreAllRequiredDefined() const {
   return values_.total_fluid_volume.has_value() &&
-         values_.min_elevation.has_value() &&
-         values_.max_elevation.has_value() &&
          values_.initial_particle_spacing.has_value() &&
          values_.voxel_max_particles.has_value() &&
          values_.viscosity.has_value() && values_.rest_density.has_value() &&
@@ -121,8 +44,284 @@ bool ui::ParametersPanel::AreAllRequiredDefined() const {
          values_.friction.has_value() && values_.yield_stress.has_value();
 }
 
-ui::ParametersPanel::Values const& ui::ParametersPanel::GetValues() const {
-  return values_;
+void ui::ParametersPanel::MenuBar() {
+  if (!ImGui::BeginMenuBar()) {
+    ImGui::EndMenuBar();
+    return;
+  }
+
+  if (!ImGui::BeginMenu("File")) {
+    ImGui::EndMenuBar();
+    return;
+  }
+
+  if (ImGui::MenuItem("New", "", false, false)) {
+    // TODO
+  }
+
+  if (ImGui::MenuItem("Open", "CTRL+O")) {
+    IGFD::FileDialogConfig config{};
+    config.path = std::filesystem::current_path().string();
+    config.filePathName = simulation_config_path_;
+    config.flags = ImGuiFileDialogFlags_Modal;
+
+    ImGuiFileDialog::Instance()->OpenDialog(
+        kLoadSimulationDialogKey, "Open Simulation Settings",
+        "YAML files{.yaml,.yml},.*", config);
+  }
+
+  if (ImGui::MenuItem("Save", "CTRL+S")) {
+    IGFD::FileDialogConfig config{};
+    config.path = std::filesystem::current_path().string();
+    config.filePathName = simulation_config_path_;
+    config.flags =
+        ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
+
+    ImGuiFileDialog::Instance()->OpenDialog(
+        kSaveSimulationDialogKey, "Save Simulation Settings",
+        "YAML files{.yaml,.yml},.*", config);
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::MenuItem("Select DEM")) {
+    IGFD::FileDialogConfig config{};
+    config.path = std::filesystem::current_path().string();
+    config.filePathName = dem_texture_path_;
+    config.flags = ImGuiFileDialogFlags_Modal;
+
+    ImGuiFileDialog::Instance()->OpenDialog(
+        kUploadDialogKey, "Select Digital Elevation Model",
+        "GeoTiff files{.tif,.tiff},.*", config);
+  }
+
+  if (ImGui::MenuItem("Select visualization texture")) {
+    IGFD::FileDialogConfig config{};
+    config.path = std::filesystem::current_path().string();
+    config.filePathName = visualization_texture_path_;
+    config.flags = ImGuiFileDialogFlags_Modal;
+
+    ImGuiFileDialog::Instance()->OpenDialog(
+        kUploadTerrainDialogKey, "Upload Visualization Texture",
+        "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
+  }
+
+  ImGui::Separator();
+
+  bool debug = true;
+  if (ImGui::MenuItem("Debug", "", debug)) {
+    // TODO
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::MenuItem("Quit", "ALT+F4", false, false)) {
+    // TODO
+  }
+
+  ImGui::EndMenu();  // File
+
+  if (!ImGui::BeginMenu("Help")) {
+    ImGui::EndMenuBar();
+    return;
+  }
+
+  if (ImGui::MenuItem("Help", "F1")) {
+    // TODO
+  }
+
+  ImGui::EndMenu();  // Help
+
+  ImGui::EndMenuBar();
 }
 
-void ui::ParametersPanel::SetValues(Values const& values) { values_ = values; }
+bool ui::ParametersPanel::ParametersInput() {
+  bool changed = false;
+
+  ImGui::Spacing();
+
+  char* loaded_simulation = simulation_config_path_.data();
+  ImGui::InputText("Loaded simulation", loaded_simulation, 255,
+                   ImGuiInputTextFlags_ReadOnly);
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Path to the loaded simulation file");
+  }
+
+  ImGui::Spacing();
+
+  ImGui::Separator();
+
+  ImGui::Spacing();
+
+  char* dem = dem_texture_path_.data();
+  ImGui::InputText("DEM", dem, 255, ImGuiInputTextFlags_ReadOnly);
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Path to the DEM file");
+  }
+
+  float dem_resolution = values_.dem_resolution.value_or(10.0F);
+  if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution, 1, 10)) {
+    values_.dem_resolution = dem_resolution;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("m/pixel");
+  }
+
+  ImGui::Spacing();
+
+  char* visualization_texture = visualization_texture_path_.data();
+  ImGui::InputText("Visualization Texture", visualization_texture, 255,
+                   ImGuiInputTextFlags_ReadOnly);
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Path to the visualization texture");
+  }
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Initialization");
+
+  float total_fluid_volume = values_.total_fluid_volume.value_or(0.00F);
+  if (ImGui::InputFloat("Total Tailings Volume (m³)", &total_fluid_volume,
+                        500000.0F, 1000000.0F, "%.2f")) {
+    values_.total_fluid_volume = total_fluid_volume;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Total volume of tailings to simulate");
+  }
+
+  float initial_particle_spacing =
+      values_.initial_particle_spacing.value_or(0.010F);
+  if (ImGui::InputFloat("Initial Particle Spacing (m)",
+                        &initial_particle_spacing, 0.5F, 1.0F, "%.3f")) {
+    values_.initial_particle_spacing = initial_particle_spacing;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Distance between particles in the initial state");
+  }
+
+  int voxel_max_particles =
+      static_cast<int>(values_.voxel_max_particles.value_or(16));
+  if (ImGui::SliderInt("Max Particles Per Voxel", &voxel_max_particles, 1, 64,
+                       "%d")) {
+    values_.voxel_max_particles = static_cast<uint32_t>(voxel_max_particles);
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Maximum particles per bucket cell");
+  }
+
+  ImGui::Spacing();
+
+  ImGui::Text("Fluid Properties");
+
+  float rest_density = values_.rest_density.value_or(500.00F);
+  if (ImGui::SliderFloat("Rest Density (kg/m³)", &rest_density, 500.0F,
+                         10000.0F, "%.2f")) {
+    values_.rest_density = rest_density;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Reference density of the fluid");
+  }
+
+  float gas_constant = values_.gas_constant.value_or(1.00F);
+  if (ImGui::SliderFloat("Gas Constant (Pa·m³/kg)", &gas_constant, 1.0F,
+                         1000.0F, "%.2f")) {
+    values_.gas_constant = gas_constant;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Parameter k in the equation of state: p = k(ρ - ρ0)");
+  }
+
+  float friction = values_.friction.value_or(0.0F);
+  if (ImGui::SliderFloat("Friction Coefficient", &friction, 0.0F, 0.1F,
+                         "%.4f")) {
+    values_.friction = friction;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Boundary friction coefficient");
+  }
+
+  float viscosity = values_.viscosity.value_or(1.00F);
+  if (ImGui::SliderFloat("Plastic Viscosity (cP)", &viscosity, 1.0F, 10000.0F,
+                         "%.2f")) {
+    values_.viscosity = viscosity;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Dynamic viscosity of the fluid (Bingham model)");
+  }
+
+  float yield_stress = values_.yield_stress.value_or(0.000F);
+  if (ImGui::SliderFloat("Yield Stress (Pa)", &yield_stress, 0.0F, 10000.0F,
+                         "%.3f")) {
+    values_.yield_stress = yield_stress;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Minimum stress for flow (Bingham model)");
+  }
+
+  float coefficient_of_restitution =
+      values_.coefficient_of_restitution.value_or(0.067F);
+  if (ImGui::SliderFloat("Coefficient of Restitution",
+                         &coefficient_of_restitution, 0.0F, 1.0F, "%.3f")) {
+    values_.coefficient_of_restitution = coefficient_of_restitution;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Elasticity of contact (0 = perfectly inelastic)");
+  }
+
+  return changed;
+}
+
+void ui::ParametersPanel::DisplayFileDialogs() {
+  if (ImGuiFileDialog::Instance()->Display(
+          kUploadDialogKey, ImGuiWindowFlags_NoCollapse, ImVec2(600.0F, 450.0F),
+          ImVec2(700.0F, 525.0F))) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      events_.uploaded_dem_texture_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  if (ImGuiFileDialog::Instance()->Display(
+          kUploadTerrainDialogKey, ImGuiWindowFlags_NoCollapse,
+          ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      events_.uploaded_visualization_texture_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  if (ImGuiFileDialog::Instance()->Display(
+          kSaveSimulationDialogKey, ImGuiWindowFlags_NoCollapse,
+          ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      events_.save_simulation_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  if (ImGuiFileDialog::Instance()->Display(
+          kLoadSimulationDialogKey, ImGuiWindowFlags_NoCollapse,
+          ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      events_.load_simulation_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+}
