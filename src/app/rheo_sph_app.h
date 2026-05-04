@@ -38,6 +38,7 @@ class RheoSPHApp {
   UiController ui_controller_;
   double last_time_ = 0;
   double delta_time_ = 0;
+  bool should_close_ = false;
 };
 }  // namespace app
 

@@ -16,6 +16,7 @@
 #include "../simulation/fluid_simulator.h"
 #include "../ui/panels/control_panel.h"
 #include "../ui/panels/parameters_panel.h"
+#include "rheo-sph/src/core/input_events.h"
 
 namespace {
 
@@ -189,6 +190,8 @@ UiIntent UiController::Draw(bool simulation_running) {
   bool parameters_changed = parameters_panel_.Draw();
   ui::ParametersPanel::Events menu_events = parameters_panel_.GetEvents();
 
+  intent.quit_app = menu_events.quit_requested;
+
   if (menu_events.uploaded_dem_texture_path.has_value() &&
       !menu_events.uploaded_dem_texture_path->empty()) {
     if (LoadElevationSamples(
@@ -278,6 +281,10 @@ UiIntent UiController::Draw(bool simulation_running) {
   parameters_panel_.ClearEvents();
 
   return intent;
+}
+
+void UiController::ProcessInput(core::InputState const& input_state) {
+  parameters_panel_.ProcessInput(input_state);
 }
 
 bool UiController::SaveSimulationConfig(std::string const& path) {

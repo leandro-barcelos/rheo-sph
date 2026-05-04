@@ -1,8 +1,12 @@
 #ifndef RHEOSPH_INPUT_EVENTS_H
 #define RHEOSPH_INPUT_EVENTS_H
 
+#include <cstdint>
 #include <optional>
+#include <vector>
 namespace core {
+
+enum Key : uint8_t { kF1, kO, kS };
 
 struct CursorPosition {
   double x = 0.0;
@@ -29,6 +33,7 @@ struct InputState {
   InputModifiers modifiers;
   std::optional<MouseDragEvent> mouse_drag_event;
   std::optional<ScrollEvent> scroll_event;
+  std::vector<Key> pressed_keys;
 } __attribute__((aligned(128)));
 
 }  // namespace core

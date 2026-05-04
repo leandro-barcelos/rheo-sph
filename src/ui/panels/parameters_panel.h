@@ -5,6 +5,8 @@
 #include <optional>
 #include <string>
 
+#include "rheo-sph/src/core/input_events.h"
+
 namespace ui {
 
 class ParametersPanel {
@@ -14,6 +16,7 @@ class ParametersPanel {
     std::optional<std::string> uploaded_visualization_texture_path;
     std::optional<std::string> save_simulation_path;
     std::optional<std::string> load_simulation_path;
+    bool quit_requested = false;
   } __attribute__((aligned(128)));
 
   struct Values {
@@ -33,6 +36,7 @@ class ParametersPanel {
 
   [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
+  void ProcessInput(core::InputState const& input_state);
 
   [[nodiscard]] Values const& GetValues() const { return values_; }
   void SetValues(Values const& values) { values_ = values; }
@@ -53,10 +57,15 @@ class ParametersPanel {
   std::string dem_texture_path_;
   std::string visualization_texture_path_;
   std::string simulation_config_path_;
+  bool help_modal_opened_ = false;
+  bool menu_changed_ = false;
 
   void MenuBar();
+  void SaveFileDialog();
+  void LoadFileDialog();
   [[nodiscard]] bool ParametersInput();
   void DisplayFileDialogs();
+  void DisplayModals();
 };
 
 }  // namespace ui

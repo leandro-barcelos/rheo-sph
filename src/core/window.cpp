@@ -124,8 +124,10 @@ core::InputState core::Window::DrainInputEvents() {
   drained.modifiers = input_events_.modifiers;
   drained.mouse_drag_event = input_events_.mouse_drag_event;
   drained.scroll_event = input_events_.scroll_event;
+  drained.pressed_keys = input_events_.pressed_keys;
 
   input_events_.scroll_event = std::nullopt;
+  input_events_.pressed_keys.clear();
 
   return drained;
 }
@@ -149,10 +151,8 @@ void core::Window::SetEventCallbacks() {
   glfwSetKeyCallback(window_, KeyCallback);
 }
 
-void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
-                               int action, int /*mods*/) {
-  InputState* input_events = nullptr;
-  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
+namespace {
+void HandleModifierKey(core::InputState* input_events, int key, int action) {
   switch (key) {
     case GLFW_KEY_LEFT_SHIFT:
     case GLFW_KEY_RIGHT_SHIFT:
@@ -171,8 +171,39 @@ void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
       }
       break;
     default:
-      return;
+      break;
   }
+}
+
+void HandleActionKey(core::InputState* input_events, int key, int action) {
+  switch (key) {
+    case GLFW_KEY_F1:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        input_events->pressed_keys.push_back(core::Key::kF1);
+      }
+      break;
+    case GLFW_KEY_O:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        input_events->pressed_keys.push_back(core::Key::kO);
+      }
+      break;
+    case GLFW_KEY_S:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        input_events->pressed_keys.push_back(core::Key::kS);
+      }
+      break;
+    default:
+      break;
+  }
+}
+}  // namespace
+
+void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
+                               int action, int /*mods*/) {
+  InputState* input_events = nullptr;
+  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
+  HandleModifierKey(input_events, key, action);
+  HandleActionKey(input_events, key, action);
 }
 
 void core::Window::CursorPosCallback(GLFWwindow* window, double xpos,

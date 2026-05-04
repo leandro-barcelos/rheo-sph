@@ -49,6 +49,7 @@ class Window {
       VulkanDevice const& vulkan_device) const;
   [[nodiscard]] vk::raii::SurfaceKHR const& Surface() const { return surface_; }
   [[nodiscard]] GLFWwindow* Handle() const { return window_; }
+  void RequestClose();
 
  private:
   GLFWwindow* window_;

@@ -4,12 +4,14 @@
 
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
+#include "rheo-sph/src/core/input_events.h"
 
 namespace {
 constexpr const char* kUploadDialogKey = "UploadElevationTextureDialog";
 constexpr const char* kUploadTerrainDialogKey = "UploadTerrainTextureDialog";
 constexpr const char* kSaveSimulationDialogKey = "SaveSimulationDialog";
 constexpr const char* kLoadSimulationDialogKey = "LoadSimulationDialog";
+constexpr const char* kHelpModalKey = "Help";
 }  // namespace
 
 bool ui::ParametersPanel::Draw() {
@@ -26,10 +28,15 @@ bool ui::ParametersPanel::Draw() {
 
   MenuBar();
   bool changed = ParametersInput();
+  if (menu_changed_) {
+    changed = true;
+    menu_changed_ = false;
+  }
 
   ImGui::End();
 
   DisplayFileDialogs();
+  DisplayModals();
 
   return changed;
 }
@@ -44,95 +51,126 @@ bool ui::ParametersPanel::AreAllRequiredDefined() const {
          values_.friction.has_value() && values_.yield_stress.has_value();
 }
 
+void ui::ParametersPanel::ProcessInput(core::InputState const& input_state) {
+  for (auto const& key : input_state.pressed_keys) {
+    switch (key) {
+      case core::Key::kF1:
+        help_modal_opened_ = true;
+        ImGui::OpenPopup(kHelpModalKey);
+        break;
+      case core::Key::kO:
+        if (input_state.modifiers.control) {
+          LoadFileDialog();
+        }
+        break;
+      case core::Key::kS:
+        if (input_state.modifiers.control) {
+          SaveFileDialog();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 void ui::ParametersPanel::MenuBar() {
   if (!ImGui::BeginMenuBar()) {
     ImGui::EndMenuBar();
     return;
   }
 
-  if (!ImGui::BeginMenu("File")) {
-    ImGui::EndMenuBar();
-    return;
+  if (ImGui::BeginMenu("File")) {
+    if (ImGui::MenuItem("New", "")) {
+      values_ = Values{};
+      events_ = Events{};
+      dem_texture_path_.clear();
+      visualization_texture_path_.clear();
+      simulation_config_path_.clear();
+      help_modal_opened_ = false;
+      menu_changed_ = true;
+    }
+
+    if (ImGui::MenuItem("Open", "CTRL+O")) {
+      LoadFileDialog();
+    }
+
+    if (ImGui::MenuItem("Save", "CTRL+S")) {
+      SaveFileDialog();
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem("Select DEM")) {
+      IGFD::FileDialogConfig config{};
+      config.path = std::filesystem::current_path().string();
+      config.filePathName = dem_texture_path_;
+      config.flags = ImGuiFileDialogFlags_Modal;
+
+      ImGuiFileDialog::Instance()->OpenDialog(
+          kUploadDialogKey, "Select Digital Elevation Model",
+          "GeoTiff files{.tif,.tiff},.*", config);
+    }
+
+    if (ImGui::MenuItem("Select visualization texture")) {
+      IGFD::FileDialogConfig config{};
+      config.path = std::filesystem::current_path().string();
+      config.filePathName = visualization_texture_path_;
+      config.flags = ImGuiFileDialogFlags_Modal;
+
+      ImGuiFileDialog::Instance()->OpenDialog(
+          kUploadTerrainDialogKey, "Upload Visualization Texture",
+          "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
+    }
+
+    ImGui::Separator();
+
+    bool debug = true;
+    if (ImGui::MenuItem("Debug", "", debug)) {
+      // TODO
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem("Quit")) {
+      events_.quit_requested = true;
+    }
+    ImGui::EndMenu();
   }
 
-  if (ImGui::MenuItem("New", "", false, false)) {
-    // TODO
+  if (ImGui::BeginMenu("Help")) {
+    if (ImGui::MenuItem("Help", "F1")) {
+      help_modal_opened_ = true;
+      ImGui::OpenPopup(kHelpModalKey);
+    }
+
+    ImGui::EndMenu();
   }
-
-  if (ImGui::MenuItem("Open", "CTRL+O")) {
-    IGFD::FileDialogConfig config{};
-    config.path = std::filesystem::current_path().string();
-    config.filePathName = simulation_config_path_;
-    config.flags = ImGuiFileDialogFlags_Modal;
-
-    ImGuiFileDialog::Instance()->OpenDialog(
-        kLoadSimulationDialogKey, "Open Simulation Settings",
-        "YAML files{.yaml,.yml},.*", config);
-  }
-
-  if (ImGui::MenuItem("Save", "CTRL+S")) {
-    IGFD::FileDialogConfig config{};
-    config.path = std::filesystem::current_path().string();
-    config.filePathName = simulation_config_path_;
-    config.flags =
-        ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
-
-    ImGuiFileDialog::Instance()->OpenDialog(
-        kSaveSimulationDialogKey, "Save Simulation Settings",
-        "YAML files{.yaml,.yml},.*", config);
-  }
-
-  ImGui::Separator();
-
-  if (ImGui::MenuItem("Select DEM")) {
-    IGFD::FileDialogConfig config{};
-    config.path = std::filesystem::current_path().string();
-    config.filePathName = dem_texture_path_;
-    config.flags = ImGuiFileDialogFlags_Modal;
-
-    ImGuiFileDialog::Instance()->OpenDialog(
-        kUploadDialogKey, "Select Digital Elevation Model",
-        "GeoTiff files{.tif,.tiff},.*", config);
-  }
-
-  if (ImGui::MenuItem("Select visualization texture")) {
-    IGFD::FileDialogConfig config{};
-    config.path = std::filesystem::current_path().string();
-    config.filePathName = visualization_texture_path_;
-    config.flags = ImGuiFileDialogFlags_Modal;
-
-    ImGuiFileDialog::Instance()->OpenDialog(
-        kUploadTerrainDialogKey, "Upload Visualization Texture",
-        "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
-  }
-
-  ImGui::Separator();
-
-  bool debug = true;
-  if (ImGui::MenuItem("Debug", "", debug)) {
-    // TODO
-  }
-
-  ImGui::Separator();
-
-  if (ImGui::MenuItem("Quit", "ALT+F4", false, false)) {
-    // TODO
-  }
-
-  ImGui::EndMenu();  // File
-
-  if (!ImGui::BeginMenu("Help")) {
-    ImGui::EndMenuBar();
-    return;
-  }
-
-  if (ImGui::MenuItem("Help", "F1")) {
-    // TODO
-  }
-
-  ImGui::EndMenu();  // Help
 
   ImGui::EndMenuBar();
+}
+
+void ui::ParametersPanel::SaveFileDialog() {
+  IGFD::FileDialogConfig config{};
+  config.path = std::filesystem::current_path().string();
+  config.filePathName = simulation_config_path_;
+  config.flags =
+      ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
+
+  ImGuiFileDialog::Instance()->OpenDialog(kSaveSimulationDialogKey,
+                                          "Save Simulation Settings",
+                                          "YAML files{.yaml,.yml},.*", config);
+}
+
+void ui::ParametersPanel::LoadFileDialog() {
+  IGFD::FileDialogConfig config{};
+  config.path = std::filesystem::current_path().string();
+  config.filePathName = simulation_config_path_;
+  config.flags = ImGuiFileDialogFlags_Modal;
+
+  ImGuiFileDialog::Instance()->OpenDialog(kLoadSimulationDialogKey,
+                                          "Open Simulation Settings",
+                                          "YAML files{.yaml,.yml},.*", config);
 }
 
 bool ui::ParametersPanel::ParametersInput() {
@@ -323,5 +361,32 @@ void ui::ParametersPanel::DisplayFileDialogs() {
           ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
+  }
+}
+
+void ui::ParametersPanel::DisplayModals() {
+  if (ImGui ::BeginPopupModal(kHelpModalKey, &help_modal_opened_)) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Keybinds");
+
+    ImGui::PushStyleColor(
+        ImGuiCol_Text,
+        {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1});
+    ImGui::Bullet();
+    ImGui::PopStyleColor();
+    ImGui::TextColored(
+        {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
+        "Left Click + Drag = Camera pan");
+
+    ImGui::PushStyleColor(
+        ImGuiCol_Text,
+        {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1});
+    ImGui::Bullet();
+    ImGui::PopStyleColor();
+    ImGui::TextColored(
+        {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
+        "Ctrl + Scroll = Zoom");
+
+    ImGui::EndPopup();
   }
 }

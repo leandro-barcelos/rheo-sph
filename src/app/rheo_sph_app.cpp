@@ -45,7 +45,9 @@ void app::RheoSPHApp::Init() {
 void app::RheoSPHApp::MainLoop() {
   last_time_ = 0;
 
-  while (!window_.ShouldClose()) {
+  should_close_ |= window_.ShouldClose();
+
+  while (!should_close_) {
     core::Window::PollEvents();
     auto input_events = window_.DrainInputEvents();
     renderer_.ProcessInput(window_.Size(), input_events);
@@ -61,6 +63,7 @@ void app::RheoSPHApp::MainLoop() {
 
     // 2. UI
     renderer_.BeginUiFrame();
+    ui_controller_.ProcessInput(input_events);
     UiIntent const intent = ui_controller_.Draw(session_.IsRunning());
     renderer_.EndUiFrame();
 
@@ -78,6 +81,10 @@ void app::RheoSPHApp::MainLoop() {
 }
 
 void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
+  if (intent.quit_app) {
+    should_close_ = true;
+  }
+
   if (intent.save_path.has_value()) {
     (void)ui_controller_.SaveSimulationConfig(*intent.save_path);
   }
