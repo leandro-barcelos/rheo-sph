@@ -2,28 +2,34 @@
 #define RHEOSPH_INPUT_EVENTS_H
 
 #include <optional>
-#include <variant>
-#include <vector>
 namespace core {
 
-struct MouseMovedEvent {
-  double dx, dy;
+struct CursorPosition {
+  double x = 0.0;
+  double y = 0.0;
 } __attribute__((aligned(16)));
 
-struct MouseScrollEvent {
-  double dy;
-  double x;
-  double y;
+struct MouseDragEvent {
+  CursorPosition anchor_position;
+  std::optional<CursorPosition> current_position;
+} __attribute__((aligned(64)));
+
+struct ScrollEvent {
+  CursorPosition cursor_position;
+  double delta_x = 0.0;
+  double delta_y = 0.0;
 } __attribute__((aligned(32)));
 
-struct InputEvent {
-  bool is_holding_shift = false;
-  bool is_holding_control = false;
-  bool is_holding_mouse_left_click = false;
-  std::optional<double> prev_mouse_xpos;
-  std::optional<double> prev_mouse_ypos;
-  std::vector<std::variant<MouseMovedEvent, MouseScrollEvent>> events;
-} __attribute__((aligned(64)));
+struct InputModifiers {
+  bool shift = false;
+  bool control = false;
+} __attribute__((aligned(2)));
+
+struct InputState {
+  InputModifiers modifiers;
+  std::optional<MouseDragEvent> mouse_drag_event;
+  std::optional<ScrollEvent> scroll_event;
+} __attribute__((aligned(128)));
 
 }  // namespace core
 

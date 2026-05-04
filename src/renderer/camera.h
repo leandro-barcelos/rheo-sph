@@ -3,6 +3,7 @@
 
 #include <glm/ext/vector_float3.hpp>
 #include <glm/glm.hpp>
+#include <optional>
 
 #include "../core/window.h"
 #include "rheo-sph/src/core/input_events.h"
@@ -19,7 +20,8 @@ class Camera {
         world_up_(0.0F, 1.0F, 0.0F) {}
 
   void ProcessInput(core::WindowSize const& window_size,
-                    core::InputEvent const& events, bool ignore_mouse_events);
+                    core::InputState const& input_state,
+                    bool ignore_mouse_events);
 
   [[nodiscard]] glm::mat4 ViewMatrix() const;
   [[nodiscard]] glm::mat4 ProjectionMatrix(float aspect_ratio,
@@ -39,11 +41,22 @@ class Camera {
   float mouse_sensitivity_{1.0F};
   float zoom_{45.0F};
   float far_plane_{100.0F};
+  // World-space point under the cursor when the drag began.
+  // Fixed for the entire duration of the drag so the anchor never drifts.
+  std::optional<glm::vec3> pan_anchor_world_;
 
-  void ProcessPan(float x_offset = 0.0F, float y_offset = 0.0F);
+  void ProcessMouseDragEvent(core::WindowSize const& window_size,
+                             core::MouseDragEvent const& mouse_drag);
+  void ProcessScrollEvent(core::ScrollEvent const& scroll,
+                          core::InputModifiers const& modifiers);
+  void ProcessScrollPan(float x_offset = 0.0F, float y_offset = 0.0F);
   void ProcessZoom(float z_offset = 0.0F);
-  [[nodiscard]] static glm::vec3 ScreenToWorldSpace(
-      core::WindowSize const& window_size, double xpos, double ypos);
+  [[nodiscard]] glm::vec3 ScreenToWorldPosition(
+      core::WindowSize const& window_size, double xpos, double ypos,
+      float depth_ndc = 0.0F) const;
+  [[nodiscard]] std::optional<glm::vec3> RaycastToPlane(
+      core::WindowSize const& window_size, double xpos, double ypos,
+      float plane_y = 0.0F) const;
 };
 
 }  // namespace renderer

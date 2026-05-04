@@ -39,7 +39,7 @@ class Window {
   [[nodiscard]] static std::vector<const char*> GetRequiredExtensions();
   [[nodiscard]] WindowSize Size() const;
   static void WaitEvents();
-  [[nodiscard]] InputEvent DrainInputEvents();
+  [[nodiscard]] InputState DrainInputEvents();
 
   [[nodiscard]] vk::SurfaceCapabilitiesKHR Capabilities(
       VulkanDevice const& vulkan_device) const;
@@ -53,7 +53,7 @@ class Window {
  private:
   GLFWwindow* window_;
   vk::raii::SurfaceKHR surface_ = nullptr;
-  InputEvent input_events_;
+  InputState input_events_;
 
   void SetEventCallbacks();
   static void KeyCallback(GLFWwindow* window, int key, int scancode, int action,

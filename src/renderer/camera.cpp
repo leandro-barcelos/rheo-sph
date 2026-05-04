@@ -4,50 +4,60 @@
 #include <cmath>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/matrix.hpp>
 #include <numbers>
-#include <variant>
+#include <optional>
 
 #include "rheo-sph/src/core/input_events.h"
 
+void renderer::Camera::ProcessMouseDragEvent(
+    core::WindowSize const& window_size,
+    core::MouseDragEvent const& mouse_drag) {
+  if (!mouse_drag.current_position.has_value()) {
+    pan_anchor_world_ =
+        RaycastToPlane(window_size, mouse_drag.anchor_position.x,
+                       mouse_drag.anchor_position.y);
+    return;
+  }
+
+  if (!pan_anchor_world_.has_value()) {
+    return;
+  }
+
+  auto current_position_world =
+      RaycastToPlane(window_size, mouse_drag.current_position->x,
+                     mouse_drag.current_position->y);
+
+  if (!current_position_world.has_value()) {
+    return;
+  }
+
+  auto delta = *pan_anchor_world_ - *current_position_world;
+  position_ += delta;
+}
+
+void renderer::Camera::ProcessScrollEvent(
+    core::ScrollEvent const& scroll, core::InputModifiers const& modifiers) {
+  if (modifiers.control) {
+    ProcessZoom(static_cast<float>(scroll.delta_y));
+  }
+}
+
 void renderer::Camera::ProcessInput(core::WindowSize const& window_size,
-                                    core::InputEvent const& events,
+                                    core::InputState const& input_state,
                                     bool ignore_mouse_events) {
   if (ignore_mouse_events) {
     return;
   }
 
-  for (auto const& event : events.events) {
-    if (std::holds_alternative<core::MouseMovedEvent>(event)) {
-      auto move_event = std::get<core::MouseMovedEvent>(event);
-      auto move_vector =
-          ScreenToWorldSpace(window_size, move_event.dx, move_event.dy);
-
-      if (events.is_holding_mouse_left_click) {
-        // Zoom = Ctrl + Left click + Move cursor
-        if (events.is_holding_control) {
-          ProcessZoom(-move_vector[1] * 120.0F);
-        } else if (events.is_holding_shift) {
-        } else {
-          // Pan = Left click + Move cursor
-          ProcessPan(move_vector[0], move_vector[1]);
-        }
-      }
-    } else if (std::holds_alternative<core::MouseScrollEvent>(event)) {
-      auto scroll_event = std::get<core::MouseScrollEvent>(event);
-
-      // Zoom = Ctrl + Scroll
-      if (events.is_holding_control) {
-        ProcessZoom(static_cast<float>(scroll_event.dy));
-      }
-      // Horizontal Pan = Shift + Scroll
-      else if (events.is_holding_shift) {
-        ProcessPan(static_cast<float>(scroll_event.dy) * 0.05F, 0.0F);
-      }
-      // Vertical Pan = Scroll
-      else {
-        ProcessPan(0.0F, static_cast<float>(scroll_event.dy) * 0.05F);
-      }
+  if (input_state.mouse_drag_event.has_value()) {
+    ProcessMouseDragEvent(window_size, *input_state.mouse_drag_event);
+  } else {
+    pan_anchor_world_ = std::nullopt;
+    if (input_state.scroll_event.has_value()) {
+      ProcessScrollEvent(*input_state.scroll_event, input_state.modifiers);
     }
   }
 }
@@ -88,7 +98,7 @@ void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
   far_plane_ = std::max(position_[1] - bounds_min[1] + max_dimension, 100.0F);
 }
 
-void renderer::Camera::ProcessPan(float x_offset, float y_offset) {
+void renderer::Camera::ProcessScrollPan(float x_offset, float y_offset) {
   position_ -= (right_ * x_offset + up_ * -y_offset) * movement_speed_;
 }
 
@@ -100,15 +110,47 @@ void renderer::Camera::ProcessZoom(float z_offset) {
   zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
 }
 
-glm::vec3 renderer::Camera::ScreenToWorldSpace(
-    core::WindowSize const& window_size, double xpos, double ypos) {
-  auto width = static_cast<float>(window_size.width);
-  auto height = static_cast<float>(window_size.height);
+glm::vec3 renderer::Camera::ScreenToWorldPosition(
+    core::WindowSize const& window_size, double xpos, double ypos,
+    float depth_ndc) const {
+  float const aspect = static_cast<float>(window_size.width) /
+                       static_cast<float>(window_size.height);
 
-  if (width <= 0.0F || height <= 0.0F) {
-    return {};
+  // Reconstruct NDC — Vulkan is [-1,1] x [-1,1] x [0,1]
+  float const ndc_x = ((static_cast<float>(std::floor(xpos)) + 0.5F) /
+                       static_cast<float>(window_size.width) * 2.0F) -
+                      1.0F;
+  float const ndc_y = 1.0F - ((static_cast<float>(std::floor(ypos)) + 0.5F) /
+                              static_cast<float>(window_size.height) * 2.0F);
+
+  glm::mat4 const inv = glm::inverse(ProjectionMatrix(aspect) * ViewMatrix());
+
+  glm::vec4 const clip{ndc_x, ndc_y, depth_ndc, 1.0F};
+  glm::vec4 world = inv * clip;
+  world /= world[3];
+
+  return glm::vec3{world};
+}
+
+std::optional<glm::vec3> renderer::Camera::RaycastToPlane(
+    core::WindowSize const& window_size, double xpos, double ypos,
+    float plane_y) const {
+  auto near_point = ScreenToWorldPosition(window_size, xpos, ypos, 0.0F);
+  auto far_point = ScreenToWorldPosition(window_size, xpos, ypos, 1.0F);
+
+  glm::vec3 const ray_dir = glm::normalize(far_point - near_point);
+
+  // Quit if ray and plane are parallel
+  if (std::abs(ray_dir[1]) < 1e-6F) {
+    return std::nullopt;
   }
 
-  return {static_cast<float>(xpos) / width, static_cast<float>(ypos) / height,
-          0.0F};
+  float const plane_depth = (plane_y - near_point[1]) / ray_dir[1];
+
+  // Intersection is behind the camera
+  if (plane_depth < 0.0F) {
+    return std::nullopt;
+  }
+
+  return near_point + plane_depth * ray_dir;
 }

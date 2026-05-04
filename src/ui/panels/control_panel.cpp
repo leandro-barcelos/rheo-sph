@@ -44,6 +44,18 @@ ui::ControlPanel::Events ui::ControlPanel::Draw(bool simulation_running,
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
       ImGui::SetTooltip("Reset");
     }
+
+    ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Keybinds")) {
+      ImGui::TextColored(
+          {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
+          "LeftClick + Drag = Pan");
+
+      ImGui::TextColored(
+          {0.8784313725490196, 0.6588235294117647, 0.09803921568627451, 1},
+          "Ctrl + Scroll = Zoom");
+    }
   }
   ImGui::End();
 

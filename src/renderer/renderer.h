@@ -42,7 +42,7 @@ class Renderer {
   void OnSwapChainRecreated(core::VulkanSwapChain const& vulkan_swap_chain);
 
   void ProcessInput(core::WindowSize const& window_size,
-                    core::InputEvent const& events);
+                    core::InputState const& input_state);
   void InitTopViewCamera(
       std::shared_ptr<const std::vector<resources::Elevation>> const&
           elevation_samples);

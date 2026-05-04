@@ -124,9 +124,9 @@ void Renderer::OnSwapChainRecreated(
 }
 
 void Renderer::ProcessInput(core::WindowSize const& window_size,
-                            core::InputEvent const& events) {
+                            core::InputState const& input_state) {
   bool ignore_mouse_events = ImGui::GetIO().WantCaptureMouse;
-  camera_.ProcessInput(window_size, events, ignore_mouse_events);
+  camera_.ProcessInput(window_size, input_state, ignore_mouse_events);
 }
 
 void Renderer::InitTopViewCamera(

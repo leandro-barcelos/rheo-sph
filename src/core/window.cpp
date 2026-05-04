@@ -7,6 +7,7 @@
 #include <array>
 #include <format>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -118,17 +119,14 @@ core::WindowSize core::Window::Size() const {
 
 void core::Window::WaitEvents() { glfwWaitEvents(); }
 
-core::InputEvent core::Window::DrainInputEvents() {
-  InputEvent drained;
-  drained.is_holding_shift = input_events_.is_holding_shift;
-  drained.is_holding_control = input_events_.is_holding_control;
-  drained.is_holding_mouse_left_click =
-      input_events_.is_holding_mouse_left_click;
-  drained.prev_mouse_xpos = input_events_.prev_mouse_xpos;
-  drained.prev_mouse_ypos = input_events_.prev_mouse_ypos;
-  drained.events = std::move(input_events_.events);
+core::InputState core::Window::DrainInputEvents() {
+  InputState drained;
+  drained.modifiers = input_events_.modifiers;
+  drained.mouse_drag_event = input_events_.mouse_drag_event;
+  drained.scroll_event = input_events_.scroll_event;
 
-  input_events_.events.clear();
+  input_events_.scroll_event = std::nullopt;
+
   return drained;
 }
 
@@ -153,23 +151,23 @@ void core::Window::SetEventCallbacks() {
 
 void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
                                int action, int /*mods*/) {
-  InputEvent* input_events = nullptr;
-  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  InputState* input_events = nullptr;
+  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
   switch (key) {
     case GLFW_KEY_LEFT_SHIFT:
     case GLFW_KEY_RIGHT_SHIFT:
       if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->is_holding_shift = true;
+        input_events->modifiers.shift = true;
       } else if (action == GLFW_RELEASE) {
-        input_events->is_holding_shift = false;
+        input_events->modifiers.shift = false;
       }
       break;
     case GLFW_KEY_LEFT_CONTROL:
     case GLFW_KEY_RIGHT_CONTROL:
       if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->is_holding_control = true;
+        input_events->modifiers.control = true;
       } else if (action == GLFW_RELEASE) {
-        input_events->is_holding_control = false;
+        input_events->modifiers.control = false;
       }
       break;
     default:
@@ -179,45 +177,62 @@ void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
 
 void core::Window::CursorPosCallback(GLFWwindow* window, double xpos,
                                      double ypos) {
-  InputEvent* input_events = nullptr;
-  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  InputState* input_events = nullptr;
+  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
 
-  if (input_events->prev_mouse_xpos.has_value() &&
-      input_events->prev_mouse_ypos.has_value()) {
-    double distance_x = xpos - input_events->prev_mouse_xpos.value();
-    double distance_y = ypos - input_events->prev_mouse_ypos.value();
-    input_events->events.emplace_back(
-        MouseMovedEvent{.dx = distance_x, .dy = distance_y});
+  auto mouse_drag_opt = input_events->mouse_drag_event;
+  if (!mouse_drag_opt.has_value()) {
+    return;
   }
 
-  input_events->prev_mouse_xpos = xpos;
-  input_events->prev_mouse_ypos = ypos;
+  mouse_drag_opt->current_position = CursorPosition{.x = xpos, .y = ypos};
+  input_events->mouse_drag_event = mouse_drag_opt;
 }
 
 void core::Window::MouseButtonCallback(GLFWwindow* window,
                                        int button,  // NOLINT
                                        int action, int /*mods*/) {
-  InputEvent* input_events = nullptr;
-  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  InputState* input_events = nullptr;
+  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
   if (button == GLFW_MOUSE_BUTTON_LEFT) {
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-      input_events->is_holding_mouse_left_click = true;
+      // Operate on a local copy of the optional to avoid dereferencing a
+      // disengaged optional if it changes concurrently between checks.
+      auto mouse_drag_opt = input_events->mouse_drag_event;
+      if (mouse_drag_opt.has_value()) {
+        if (mouse_drag_opt->current_position.has_value()) {
+          mouse_drag_opt->anchor_position = *mouse_drag_opt->current_position;
+          mouse_drag_opt->current_position = std::nullopt;
+        }
+        input_events->mouse_drag_event = mouse_drag_opt;
+        return;
+      }
+
+      double xpos = 0;
+      double ypos = 0;
+      glfwGetCursorPos(window, &xpos, &ypos);
+      input_events->mouse_drag_event = core::MouseDragEvent{
+          .anchor_position = CursorPosition{.x = xpos, .y = ypos},
+          .current_position = std::nullopt};
     } else if (action == GLFW_RELEASE) {
-      input_events->is_holding_mouse_left_click = false;
+      input_events->mouse_drag_event = std::nullopt;
     }
   }
 }
 
-void core::Window::ScrollCallback(GLFWwindow* window, double /*xoffset*/,
+void core::Window::ScrollCallback(GLFWwindow* window, double xoffset,
                                   double yoffset) {
-  InputEvent* input_events = nullptr;
-  input_events = static_cast<InputEvent*>(glfwGetWindowUserPointer(window));
+  InputState* input_events = nullptr;
+  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
 
   double xpos = 0;
   double ypos = 0;
   glfwGetCursorPos(window, &xpos, &ypos);
-  input_events->events.emplace_back(
-      MouseScrollEvent{.dy = yoffset, .x = xpos, .y = ypos});
+  input_events->scroll_event = ScrollEvent{
+      .cursor_position = CursorPosition{.x = xpos, .y = ypos},
+      .delta_x = xoffset,
+      .delta_y = yoffset,
+  };
 }
 
 void core::Window::ErrorCallback(int error, const char* description) {
