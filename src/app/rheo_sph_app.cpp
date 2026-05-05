@@ -45,9 +45,7 @@ void app::RheoSPHApp::Init() {
 void app::RheoSPHApp::MainLoop() {
   last_time_ = 0;
 
-  should_close_ |= window_.ShouldClose();
-
-  while (!should_close_) {
+  while (!should_close_ && !window_.ShouldClose()) {
     core::Window::PollEvents();
     auto input_events = window_.DrainInputEvents();
     renderer_.ProcessInput(window_.Size(), input_events);

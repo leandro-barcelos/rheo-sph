@@ -142,7 +142,7 @@ void ui::ParametersPanel::MenuBar() {
 
     ImGui::Separator();
 
-    if (ImGui::MenuItem("Quit")) {
+    if (ImGui::MenuItem("Quit", "ALT+F4")) {
       events_.quit_requested = true;
     }
     ImGui::EndMenu();

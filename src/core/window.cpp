@@ -175,11 +175,19 @@ void HandleModifierKey(core::InputState* input_events, int key, int action) {
   }
 }
 
-void HandleActionKey(core::InputState* input_events, int key, int action) {
+void HandleActionKey(GLFWwindow* window, core::InputState* input_events,
+                     int key, int action, int mods) {
   switch (key) {
     case GLFW_KEY_F1:
       if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         input_events->pressed_keys.push_back(core::Key::kF1);
+      }
+      break;
+    case GLFW_KEY_F4:
+      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if ((mods & GLFW_MOD_ALT) != 0) {
+          glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
       }
       break;
     case GLFW_KEY_O:
@@ -199,11 +207,11 @@ void HandleActionKey(core::InputState* input_events, int key, int action) {
 }  // namespace
 
 void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
-                               int action, int /*mods*/) {
+                               int action, int mods) {
   InputState* input_events = nullptr;
   input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
   HandleModifierKey(input_events, key, action);
-  HandleActionKey(input_events, key, action);
+  HandleActionKey(window, input_events, key, action, mods);
 }
 
 void core::Window::CursorPosCallback(GLFWwindow* window, double xpos,
