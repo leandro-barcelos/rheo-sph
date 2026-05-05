@@ -61,9 +61,11 @@ class ParametersPanel {
   bool menu_changed_ = false;
 
   void MenuBar();
+  bool TabBar();
+  bool TerrainTab();
+  bool ParametersTab();
   void SaveFileDialog();
   void LoadFileDialog();
-  [[nodiscard]] bool ParametersInput();
   void DisplayFileDialogs();
   void DisplayModals();
 };

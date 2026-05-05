@@ -27,7 +27,17 @@ bool ui::ParametersPanel::Draw() {
   }
 
   MenuBar();
-  bool changed = ParametersInput();
+
+  char* loaded_simulation = simulation_config_path_.data();
+  ImGui::InputText("Loaded simulation", loaded_simulation, 255,
+                   ImGuiInputTextFlags_ReadOnly);
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Path to the loaded simulation file");
+  }
+
+  ImGui::Spacing();
+
+  bool changed = TabBar();
   if (menu_changed_) {
     changed = true;
     menu_changed_ = false;
@@ -150,74 +160,58 @@ void ui::ParametersPanel::MenuBar() {
   ImGui::EndMenuBar();
 }
 
-void ui::ParametersPanel::SaveFileDialog() {
-  IGFD::FileDialogConfig config{};
-  config.path = std::filesystem::current_path().string();
-  config.filePathName = simulation_config_path_;
-  config.flags =
-      ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
-
-  ImGuiFileDialog::Instance()->OpenDialog(kSaveSimulationDialogKey,
-                                          "Save Simulation Settings",
-                                          "YAML files{.yaml,.yml},.*", config);
-}
-
-void ui::ParametersPanel::LoadFileDialog() {
-  IGFD::FileDialogConfig config{};
-  config.path = std::filesystem::current_path().string();
-  config.filePathName = simulation_config_path_;
-  config.flags = ImGuiFileDialogFlags_Modal;
-
-  ImGuiFileDialog::Instance()->OpenDialog(kLoadSimulationDialogKey,
-                                          "Open Simulation Settings",
-                                          "YAML files{.yaml,.yml},.*", config);
-}
-
-bool ui::ParametersPanel::ParametersInput() {
+bool ui::ParametersPanel::TabBar() {
   bool changed = false;
 
-  ImGui::Spacing();
+  if (ImGui::BeginTabBar("TabBar")) {
+    changed |= TerrainTab();
+    changed |= ParametersTab();
 
-  char* loaded_simulation = simulation_config_path_.data();
-  ImGui::InputText("Loaded simulation", loaded_simulation, 255,
-                   ImGuiInputTextFlags_ReadOnly);
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Path to the loaded simulation file");
+    ImGui::EndTabBar();
   }
 
-  ImGui::Spacing();
+  return changed;
+}
 
-  ImGui::Separator();
+bool ui::ParametersPanel::TerrainTab() {
+  bool changed = false;
 
-  ImGui::Spacing();
+  if (ImGui::BeginTabItem("Terrain")) {
+    char* dem = dem_texture_path_.data();
+    ImGui::InputText("DEM", dem, 255, ImGuiInputTextFlags_ReadOnly);
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Path to the DEM file");
+    }
 
-  char* dem = dem_texture_path_.data();
-  ImGui::InputText("DEM", dem, 255, ImGuiInputTextFlags_ReadOnly);
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Path to the DEM file");
+    float dem_resolution = values_.dem_resolution.value_or(10.0F);
+    if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution, 1, 10)) {
+      values_.dem_resolution = dem_resolution;
+      changed = true;
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("m/pixel");
+    }
+
+    ImGui::Spacing();
+
+    char* visualization_texture = visualization_texture_path_.data();
+    ImGui::InputText("Visualization Texture", visualization_texture, 255,
+                     ImGuiInputTextFlags_ReadOnly);
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Path to the visualization texture");
+    }
+
+    ImGui::EndTabItem();
   }
+  return changed;
+}
 
-  float dem_resolution = values_.dem_resolution.value_or(10.0F);
-  if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution, 1, 10)) {
-    values_.dem_resolution = dem_resolution;
-    changed = true;
+bool ui::ParametersPanel::ParametersTab() {
+  bool changed = false;
+
+  if (!ImGui::BeginTabItem("Parameters")) {
+    return changed;
   }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("m/pixel");
-  }
-
-  ImGui::Spacing();
-
-  char* visualization_texture = visualization_texture_path_.data();
-  ImGui::InputText("Visualization Texture", visualization_texture, 255,
-                   ImGuiInputTextFlags_ReadOnly);
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Path to the visualization texture");
-  }
-
-  ImGui::Spacing();
-  ImGui::Separator();
-  ImGui::Spacing();
 
   ImGui::AlignTextToFramePadding();
   ImGui::Text("Initialization");
@@ -319,7 +313,32 @@ bool ui::ParametersPanel::ParametersInput() {
     ImGui::SetTooltip("Elasticity of contact (0 = perfectly inelastic)");
   }
 
+  ImGui::EndTabItem();
+
   return changed;
+}
+
+void ui::ParametersPanel::SaveFileDialog() {
+  IGFD::FileDialogConfig config{};
+  config.path = std::filesystem::current_path().string();
+  config.filePathName = simulation_config_path_;
+  config.flags =
+      ImGuiFileDialogFlags_ConfirmOverwrite | ImGuiFileDialogFlags_Modal;
+
+  ImGuiFileDialog::Instance()->OpenDialog(kSaveSimulationDialogKey,
+                                          "Save Simulation Settings",
+                                          "YAML files{.yaml,.yml},.*", config);
+}
+
+void ui::ParametersPanel::LoadFileDialog() {
+  IGFD::FileDialogConfig config{};
+  config.path = std::filesystem::current_path().string();
+  config.filePathName = simulation_config_path_;
+  config.flags = ImGuiFileDialogFlags_Modal;
+
+  ImGuiFileDialog::Instance()->OpenDialog(kLoadSimulationDialogKey,
+                                          "Open Simulation Settings",
+                                          "YAML files{.yaml,.yml},.*", config);
 }
 
 void ui::ParametersPanel::DisplayFileDialogs() {
