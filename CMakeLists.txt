@@ -126,7 +126,7 @@ target_sources(
 target_include_directories(${PROJECT_NAME} PRIVATE external)
 target_link_libraries(
     ${PROJECT_NAME}
-    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp GDAL::GDAL
+    PRIVATE glfw Vulkan::cppm glm::glm imgui yaml-cpp::yaml-cpp GDAL::GDAL
 )
 
 if(UNIX AND NOT APPLE)
