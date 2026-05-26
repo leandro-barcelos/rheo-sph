@@ -12,6 +12,7 @@
 #include "../simulation/fluid_simulator.h"
 #include "../ui/panels/parameters_panel.h"
 #include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/ui/panels/control_panel.h"
 
 // X11 headers (pulled in by GLFW on Linux) may define `None` as a macro.
 // Undefine it so we can use `SimAction::None` safely.
@@ -60,6 +61,7 @@ class UiController {
 
  private:
   ui::ParametersPanel parameters_panel_;
+  ui::ControlPanel control_panel_;
   std::string pending_elevation_texture_path_;
   std::string pending_terrain_texture_path_;
   std::shared_ptr<const std::vector<resources::Elevation>>

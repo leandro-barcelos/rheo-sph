@@ -267,9 +267,10 @@ UiIntent UiController::Draw(bool simulation_running) {
       parameters_panel_.GetValues(), pending_elevation_texture_path_,
       pending_elevation_samples_, pending_elevation_dimensions_);
   bool const can_play = intent.built_parameters.has_value();
+  bool const can_edit_dam = !pending_elevation_texture_path_.empty();
 
   ui::ControlPanel::Events const top_bar_events =
-      ui::ControlPanel::Draw(simulation_running, can_play);
+      control_panel_.Draw(simulation_running, can_play, can_edit_dam);
   if (top_bar_events.play_pressed) {
     intent.sim_action = UiIntent::SimAction::kPlay;
   } else if (top_bar_events.pause_pressed) {
