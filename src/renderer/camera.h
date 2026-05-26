@@ -4,9 +4,11 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/glm.hpp>
 #include <optional>
+#include <vector>
 
 #include "../core/window.h"
 #include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/resources/elevation.h"
 
 namespace renderer {
 
@@ -27,6 +29,10 @@ class Camera {
   [[nodiscard]] glm::mat4 ProjectionMatrix(float aspect_ratio,
                                            float near_plane = 0.1F) const;
   void InitTopView(glm::vec3 const& bounds_min, glm::vec3 const& bounds_max);
+  [[nodiscard]] std::optional<glm::vec3> RaycastToTerrain(
+      core::WindowSize const& window_size, double xpos, double ypos,
+      std::vector<resources::Elevation> const& elevation_samples,
+      uint32_t dem_width, uint32_t dem_height, float step = 0.01F) const;
   [[nodiscard]] glm::vec3 Position() const { return position_; }
   [[nodiscard]] glm::vec3 Front() const { return front_; }
   [[nodiscard]] float Zoom() const { return zoom_; }

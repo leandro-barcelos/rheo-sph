@@ -98,6 +98,44 @@ void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
   far_plane_ = std::max(position_[1] - bounds_min[1] + max_dimension, 100.0F);
 }
 
+std::optional<glm::vec3> renderer::Camera::RaycastToTerrain(
+    core::WindowSize const& window_size, double xpos, double ypos,
+    std::vector<resources::Elevation> const& elevation_samples,
+    uint32_t dem_width, uint32_t dem_height, float step) const {
+  auto near_point = ScreenToWorldPosition(window_size, xpos, ypos, 0.0F);
+  auto far_point = ScreenToWorldPosition(window_size, xpos, ypos, 1.0F);
+
+  if (elevation_samples.empty() || dem_width == 0 || dem_height == 0 ||
+      step <= 0.0F) {
+    return std::nullopt;
+  }
+
+  glm::vec3 const ray_vector = far_point - near_point;
+  float const ray_length = glm::length(ray_vector);
+  if (ray_length <= 0.0F) {
+    return std::nullopt;
+  }
+
+  glm::vec3 const ray_dir = ray_vector / ray_length;
+
+  for (uint32_t step_index = 0;; ++step_index) {
+    float const travelled = static_cast<float>(step_index) * step;
+    if (travelled > ray_length) {
+      break;
+    }
+
+    glm::vec3 const current_point = near_point + travelled * ray_dir;
+    float const terrain_height = resources::Elevation::GetElevation(
+        elevation_samples, dem_width, dem_height, current_point);
+
+    if (current_point[1] <= terrain_height) {
+      return current_point;
+    }
+  }
+
+  return std::nullopt;
+}
+
 void renderer::Camera::ProcessScrollPan(float x_offset, float y_offset) {
   position_ -= (right_ * x_offset + up_ * -y_offset) * movement_speed_;
 }
