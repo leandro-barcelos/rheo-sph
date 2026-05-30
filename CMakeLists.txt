@@ -91,6 +91,10 @@ target_sources(
         src/core/vulkan_swap_chain.h
         src/core/window.cpp
         src/core/window.h
+    src/events/event.h
+    src/events/event_handler.h
+    src/events/event_manager.h
+    src/events/event_manager.cpp
         src/renderer/camera.cpp
         src/renderer/camera.h
         src/renderer/fluid_renderer.cpp
