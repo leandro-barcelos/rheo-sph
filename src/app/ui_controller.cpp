@@ -7,7 +7,6 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <ios>
 #include <optional>
 #include <string>
 #include <utility>
@@ -16,7 +15,6 @@
 #include "../simulation/fluid_simulator.h"
 #include "../ui/panels/control_panel.h"
 #include "../ui/panels/parameters_panel.h"
-#include "rheo-sph/src/core/input_events.h"
 
 namespace {
 
@@ -282,10 +280,6 @@ UiIntent UiController::Draw(bool simulation_running) {
   parameters_panel_.ClearEvents();
 
   return intent;
-}
-
-void UiController::ProcessInput(core::InputState const& input_state) {
-  parameters_panel_.ProcessInput(input_state);
 }
 
 bool UiController::SaveSimulationConfig(std::string const& path) {

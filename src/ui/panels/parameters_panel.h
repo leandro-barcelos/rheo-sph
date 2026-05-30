@@ -5,12 +5,21 @@
 #include <optional>
 #include <string>
 
-#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/events/event_handler.h"
+#include "rheo-sph/src/events/keyboard_event.h"
 
 namespace ui {
 
 class ParametersPanel {
  public:
+  ParametersPanel(ParametersPanel const&) = delete;
+  ParametersPanel(ParametersPanel&&) = delete;
+  ParametersPanel& operator=(ParametersPanel const&) = delete;
+  ParametersPanel& operator=(ParametersPanel&&) = delete;
+
+  ParametersPanel();
+  ~ParametersPanel();
+
   struct Events {
     std::optional<std::string> uploaded_dem_texture_path;
     std::optional<std::string> uploaded_visualization_texture_path;
@@ -36,7 +45,6 @@ class ParametersPanel {
 
   [[nodiscard]] bool Draw();
   [[nodiscard]] bool AreAllRequiredDefined() const;
-  void ProcessInput(core::InputState const& input_state);
 
   [[nodiscard]] Values const& GetValues() const { return values_; }
   void SetValues(Values const& values) { values_ = values; }
@@ -59,7 +67,13 @@ class ParametersPanel {
   std::string simulation_config_path_;
   bool help_modal_opened_ = false;
   bool menu_changed_ = false;
+  bool is_control_pressed_ = false;
 
+  events::EventHandler<events::KeyPressedEvent> key_pressed_handler_;
+  events::EventHandler<events::KeyReleasedEvent> key_released_handler_;
+
+  void OnKeyPressedEvent(events::KeyPressedEvent const& event);
+  void OnKeyReleasedEvent(events::KeyReleasedEvent const& event);
   void MenuBar();
   bool TabBar();
   bool TerrainTab();

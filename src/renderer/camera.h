@@ -7,35 +7,49 @@
 #include <vector>
 
 #include "../core/window.h"
-#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/events/event_handler.h"
+#include "rheo-sph/src/events/keyboard_event.h"
+#include "rheo-sph/src/events/mouse_event.h"
+#include "rheo-sph/src/events/ui_event.h"
+#include "rheo-sph/src/events/window_event.h"
 #include "rheo-sph/src/resources/elevation.h"
 
 namespace renderer {
 
 class Camera {
  public:
-  explicit Camera(glm::vec3 position = glm::vec3(0.0F, 0.0F, 0.0F))
-      : position_(position),
-        front_(0.0F, -1.0F, 0.0F),
-        up_(0.0F, 0.0F, -1.0F),
-        right_(1.0F, 0.0F, 0.0F),
-        world_up_(0.0F, 1.0F, 0.0F) {}
+  Camera(Camera const&) = delete;
+  Camera(Camera&&) = delete;
+  Camera& operator=(Camera const&) = delete;
+  Camera& operator=(Camera&&) = delete;
 
-  void ProcessInput(core::WindowSize const& window_size,
-                    core::InputState const& input_state,
-                    bool ignore_mouse_events);
+  explicit Camera(glm::vec3 position, core::WindowSize initial_window_size);
+  ~Camera();
 
   [[nodiscard]] glm::mat4 ViewMatrix() const;
   [[nodiscard]] glm::mat4 ProjectionMatrix(float aspect_ratio,
                                            float near_plane = 0.1F) const;
   void InitTopView(glm::vec3 const& bounds_min, glm::vec3 const& bounds_max);
   [[nodiscard]] std::optional<glm::vec3> RaycastToTerrain(
-      core::WindowSize const& window_size, double xpos, double ypos,
+      double xpos, double ypos,
       std::vector<resources::Elevation> const& elevation_samples,
       uint32_t dem_width, uint32_t dem_height, float step = 0.01F) const;
   [[nodiscard]] glm::vec3 Position() const { return position_; }
   [[nodiscard]] glm::vec3 Front() const { return front_; }
-  [[nodiscard]] float Zoom() const { return zoom_; }
+  [[nodiscard]] float GetZoom() const { return zoom_; }
+
+  // Events' callbacks
+  void OnMouseButtonPressedEvent(events::MouseButtonPressedEvent const& event);
+  void OnMouseButtonReleasedEvent(
+      events::MouseButtonReleasedEvent const& event);
+  void OnMouseScrolledEvent(events::MouseScrolledEvent const& event);
+  void OnMouseMovedEvent(events::MouseMovedEvent const& event);
+  void OnWindowResizedEvent(events::WindowResizedEvent const& event);
+  void OnUiFocusedEvent(events::UiFocusedEvent const& event);
+  void OnUiUnfocusedEvent(events::UiUnfocusedEvent const& event);
+
+  void OnKeyPressedEvent(events::KeyPressedEvent const& event);
+  void OnKeyReleasedEvent(events::KeyReleasedEvent const& event);
 
  private:
   glm::vec3 position_;
@@ -47,22 +61,39 @@ class Camera {
   float mouse_sensitivity_{1.0F};
   float zoom_{45.0F};
   float far_plane_{100.0F};
-  // World-space point under the cursor when the drag began.
-  // Fixed for the entire duration of the drag so the anchor never drifts.
-  std::optional<glm::vec3> pan_anchor_world_;
 
-  void ProcessMouseDragEvent(core::WindowSize const& window_size,
-                             core::MouseDragEvent const& mouse_drag);
-  void ProcessScrollEvent(core::ScrollEvent const& scroll,
-                          core::InputModifiers const& modifiers);
-  void ProcessScrollPan(float x_offset = 0.0F, float y_offset = 0.0F);
-  void ProcessZoom(float z_offset = 0.0F);
-  [[nodiscard]] glm::vec3 ScreenToWorldPosition(
-      core::WindowSize const& window_size, double xpos, double ypos,
-      float depth_ndc = 0.0F) const;
+  [[nodiscard]] glm::vec3 ScreenToWorldPosition(double xpos, double ypos,
+                                                float depth_ndc = 0.0F) const;
   [[nodiscard]] std::optional<glm::vec3> RaycastToPlane(
-      core::WindowSize const& window_size, double xpos, double ypos,
-      float plane_y = 0.0F) const;
+      double xpos, double ypos, float plane_y = 0.0F) const;
+
+  // Mouse Events
+  events::EventHandler<events::MouseButtonPressedEvent>
+      mouse_button_pressed_handler_;
+  events::EventHandler<events::MouseButtonReleasedEvent>
+      mouse_button_released_handler_;
+  events::EventHandler<events::MouseScrolledEvent> mouse_scrolled_handler_;
+  events::EventHandler<events::MouseMovedEvent> mouse_moved_handler_;
+
+  // Keyboard Events
+  events::EventHandler<events::KeyPressedEvent> key_pressed_handler_;
+  events::EventHandler<events::KeyReleasedEvent> key_released_handler_;
+
+  // UI Events
+  events::EventHandler<events::UiFocusedEvent> ui_focused_handler_;
+  events::EventHandler<events::UiUnfocusedEvent> ui_unfocused_handler_;
+
+  // Window Events
+  events::EventHandler<events::WindowResizedEvent> window_resized_handler_;
+
+  // Camera Zoom
+  bool is_control_pressed_{false};
+
+  // Camera Pan
+  bool mouse_left_button_held_{false};
+  std::optional<glm::vec2> current_mouse_screen_position_;
+  core::WindowSize window_size_;
+  bool ui_focused_{false};
 };
 
 }  // namespace renderer

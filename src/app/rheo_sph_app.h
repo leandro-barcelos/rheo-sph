@@ -7,6 +7,8 @@
 #include "../core/vulkan_device.h"
 #include "../core/vulkan_swap_chain.h"
 #include "../core/window.h"
+#include "../events/keyboard_event.h"
+#include "../events/window_event.h"
 #include "../renderer/renderer.h"
 #include "simulation_session.h"
 #include "ui_controller.h"
@@ -18,7 +20,13 @@ constexpr core::WindowProperties kWindowProperties{
 
 class RheoSPHApp {
  public:
-  RheoSPHApp() : window_(kWindowProperties) {}
+  RheoSPHApp();
+  RheoSPHApp(const RheoSPHApp&) = delete;
+  RheoSPHApp(RheoSPHApp&&) = delete;
+  RheoSPHApp& operator=(const RheoSPHApp&) = delete;
+  RheoSPHApp& operator=(RheoSPHApp&&) = delete;
+  ~RheoSPHApp();
+
   void Run();
 
  private:
@@ -26,6 +34,15 @@ class RheoSPHApp {
   void MainLoop();
   void ProcessIntent(UiIntent const& intent);
   void UpdateDeltaTime();
+  void OnKeyPressedEvent(events::KeyPressedEvent const& event);
+  void OnKeyReleasedEvent(events::KeyReleasedEvent const& event);
+  void OnWindowResizedEvent(events::WindowResizedEvent const& event);
+  void RecreateSwapChainAndNotifyRenderer();
+
+  events::EventHandler<events::KeyPressedEvent> key_pressed_event_handler_;
+  events::EventHandler<events::KeyReleasedEvent> key_released_event_handler_;
+  events::EventHandler<events::WindowResizedEvent>
+      window_resized_event_handler_;
 
   core::VulkanContext context_;
   core::Window window_;
@@ -39,7 +56,10 @@ class RheoSPHApp {
   double last_time_ = 0;
   double delta_time_ = 0;
   bool should_close_ = false;
+  bool swap_chain_recreate_pending_ = false;
+  bool alt_pressed_ = false;
 };
+
 }  // namespace app
 
 #endif  // !RHEOSPH_APP_H

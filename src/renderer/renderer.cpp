@@ -3,9 +3,10 @@
 #include <algorithm>
 #include <utility>
 
-#include "imgui.h"
-
 namespace renderer {
+
+Renderer::Renderer(core::WindowSize initial_window_size)
+    : camera_(glm::vec3(0.5F, 2.0F, 0.5F), initial_window_size) {}
 
 void Renderer::Init(core::Window const& window,
                     core::VulkanContext const& context,
@@ -121,12 +122,6 @@ void Renderer::RenderFrame(core::VulkanDevice const& vulkan_device,
 void Renderer::OnSwapChainRecreated(
     core::VulkanSwapChain const& vulkan_swap_chain) {
   imgui_layer_.OnSwapChainRecreated(vulkan_swap_chain);
-}
-
-void Renderer::ProcessInput(core::WindowSize const& window_size,
-                            core::InputState const& input_state) {
-  bool ignore_mouse_events = ImGui::GetIO().WantCaptureMouse;
-  camera_.ProcessInput(window_size, input_state, ignore_mouse_events);
 }
 
 void Renderer::InitTopViewCamera(

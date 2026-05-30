@@ -37,6 +37,7 @@ class ImGuiLayer {
   vk::raii::DescriptorPool descriptor_pool_ = nullptr;
   uint32_t min_image_count_ = 0;
   bool initialized_ = false;
+  mutable bool ui_focused_{false};
 };
 
 }  // namespace ui

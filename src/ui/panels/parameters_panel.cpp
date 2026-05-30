@@ -4,7 +4,24 @@
 
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
-#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/events/event_manager.h"
+
+ui::ParametersPanel::ParametersPanel() {
+  key_pressed_handler_ = [this](events::KeyPressedEvent const& event) {
+    OnKeyPressedEvent(event);
+  };
+  key_released_handler_ = [this](events::KeyReleasedEvent const& event) {
+    OnKeyReleasedEvent(event);
+  };
+
+  events::Subscribe<events::KeyPressedEvent>(key_pressed_handler_);
+  events::Subscribe<events::KeyReleasedEvent>(key_released_handler_);
+}
+
+ui::ParametersPanel::~ParametersPanel() {
+  events::Unsubscribe<events::KeyPressedEvent>(key_pressed_handler_);
+  events::Unsubscribe<events::KeyReleasedEvent>(key_released_handler_);
+}
 
 namespace {
 constexpr const char* kUploadDialogKey = "UploadElevationTextureDialog";
@@ -61,26 +78,45 @@ bool ui::ParametersPanel::AreAllRequiredDefined() const {
          values_.friction.has_value() && values_.yield_stress.has_value();
 }
 
-void ui::ParametersPanel::ProcessInput(core::InputState const& input_state) {
-  for (auto const& key : input_state.pressed_keys) {
-    switch (key) {
-      case core::Key::kF1:
-        help_modal_opened_ = true;
-        ImGui::OpenPopup(kHelpModalKey);
-        break;
-      case core::Key::kO:
-        if (input_state.modifiers.control) {
-          LoadFileDialog();
-        }
-        break;
-      case core::Key::kS:
-        if (input_state.modifiers.control) {
-          SaveFileDialog();
-        }
-        break;
-      default:
-        break;
-    }
+void ui::ParametersPanel::OnKeyPressedEvent(
+    events::KeyPressedEvent const& event) {
+  if (event.IsRepeated()) {
+    return;
+  }
+
+  switch (event.GetKey()) {
+    case core::kLeftControl:
+    case core::kRightControl:
+      is_control_pressed_ = true;
+      break;
+    case core::kF1:
+      help_modal_opened_ = true;
+      ImGui::OpenPopup(kHelpModalKey);
+      break;
+    case core::kO:
+      if (is_control_pressed_) {
+        LoadFileDialog();
+      }
+      break;
+    case core::kS:
+      if (is_control_pressed_) {
+        SaveFileDialog();
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void ui::ParametersPanel::OnKeyReleasedEvent(
+    events::KeyReleasedEvent const& event) {
+  switch (event.GetKey()) {
+    case core::kLeftControl:
+    case core::kRightControl:
+      is_control_pressed_ = false;
+      break;
+    default:
+      break;
   }
 }
 

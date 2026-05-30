@@ -9,9 +9,33 @@
 #include "../core/command_pool.h"
 #include "../core/vulkan_device.h"
 #include "../core/window.h"
-#include "../renderer/renderer.h"
-#include "../simulation/fluid_simulator.h"
+#include "../events/event_manager.h"
+#include "rheo-sph/src/events/window_event.h"
 #include "ui_controller.h"
+
+app::RheoSPHApp::RheoSPHApp()
+    : window_(kWindowProperties), renderer_(window_.Size()) {
+  key_pressed_event_handler_ = [this](events::KeyPressedEvent const& event) {
+    OnKeyPressedEvent(event);
+  };
+  key_released_event_handler_ = [this](events::KeyReleasedEvent const& event) {
+    OnKeyReleasedEvent(event);
+  };
+  window_resized_event_handler_ =
+      [this](events::WindowResizedEvent const& event) {
+        OnWindowResizedEvent(event);
+      };
+
+  events::Subscribe<events::KeyPressedEvent>(key_pressed_event_handler_);
+  events::Subscribe<events::KeyReleasedEvent>(key_released_event_handler_);
+  events::Subscribe<events::WindowResizedEvent>(window_resized_event_handler_);
+}
+
+app::RheoSPHApp::~RheoSPHApp() {
+  events::Unsubscribe<events::KeyPressedEvent>(key_pressed_event_handler_);
+  events::Unsubscribe<events::KeyReleasedEvent>(key_released_event_handler_);
+  events::Unsubscribe(window_resized_event_handler_);
+}
 
 void app::RheoSPHApp::Run() {
   Init();
@@ -47,21 +71,24 @@ void app::RheoSPHApp::MainLoop() {
 
   while (!should_close_ && !window_.ShouldClose()) {
     core::Window::PollEvents();
-    auto input_events = window_.DrainInputEvents();
-    renderer_.ProcessInput(window_.Size(), input_events);
+    events::event_manager.DispatchEvents();
+    // TODO: Subscribe to KeyPressedEvent and quit on ALT+F4
+
+    if (swap_chain_recreate_pending_) {
+      RecreateSwapChainAndNotifyRenderer();
+      swap_chain_recreate_pending_ = false;
+    }
 
     // 1. Acquire
     uint32_t const image_index =
         vulkan_swap_chain_.AcquireNextImage(vulkan_device_, frame_sync_);
     if (image_index == core::VulkanSwapChain::kInvalidImageIndex) {
-      vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
-      renderer_.OnSwapChainRecreated(vulkan_swap_chain_);
+      RecreateSwapChainAndNotifyRenderer();
       continue;
     }
 
     // 2. UI
     renderer_.BeginUiFrame();
-    ui_controller_.ProcessInput(input_events);
     UiIntent const intent = ui_controller_.Draw(session_.IsRunning());
     renderer_.EndUiFrame();
 
@@ -143,4 +170,46 @@ void app::RheoSPHApp::UpdateDeltaTime() {
   double const current_time = glfwGetTime();
   delta_time_ = (current_time - last_time_) * 1000.0;
   last_time_ = current_time;
+}
+
+void app::RheoSPHApp::OnKeyPressedEvent(events::KeyPressedEvent const& event) {
+  switch (event.GetKey()) {
+    case core::kLeftAlt:
+    case core::kRightAlt:
+      alt_pressed_ = true;
+      break;
+    case core::kF4:
+      if (alt_pressed_) {
+        should_close_ = true;
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void app::RheoSPHApp::OnKeyReleasedEvent(
+    events::KeyReleasedEvent const& event) {
+  switch (event.GetKey()) {
+    case core::kLeftAlt:
+    case core::kRightAlt:
+      alt_pressed_ = false;
+      break;
+    default:
+      break;
+  }
+}
+
+void app::RheoSPHApp::OnWindowResizedEvent(
+    events::WindowResizedEvent const& event) {
+  if (event.GetWidth() <= 0 || event.GetHeight() <= 0) {
+    return;
+  }
+
+  swap_chain_recreate_pending_ = true;
+}
+
+void app::RheoSPHApp::RecreateSwapChainAndNotifyRenderer() {
+  vulkan_swap_chain_.RecreateSwapChain(vulkan_device_, window_);
+  renderer_.OnSwapChainRecreated(vulkan_swap_chain_);
 }

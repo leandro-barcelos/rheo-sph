@@ -11,7 +11,6 @@
 #include "../resources/elevation.h"
 #include "../simulation/fluid_simulator.h"
 #include "../ui/panels/parameters_panel.h"
-#include "rheo-sph/src/core/input_events.h"
 #include "rheo-sph/src/ui/panels/control_panel.h"
 
 // X11 headers (pulled in by GLFW on Linux) may define `None` as a macro.
@@ -52,7 +51,6 @@ struct UiIntent {
 class UiController {
  public:
   [[nodiscard]] UiIntent Draw(bool simulation_running);
-  void ProcessInput(core::InputState const& input_state);
 
   [[nodiscard]] bool SaveSimulationConfig(std::string const& path);
   // Returns nullopt on failure

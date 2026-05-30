@@ -10,6 +10,8 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
+#include "rheo-sph/src/events/event_manager.h"
+#include "rheo-sph/src/events/ui_event.h"
 
 namespace {
 
@@ -148,6 +150,16 @@ void ui::ImGuiLayer::EndFrame() const {
   }
 
   ImGui::Render();
+
+  bool const wants_mouse_capture = ImGui::GetIO().WantCaptureMouse;
+  if (wants_mouse_capture != ui_focused_) {
+    ui_focused_ = wants_mouse_capture;
+    if (ui_focused_) {
+      events::TriggerEvent(events::UiFocusedEvent{});
+    } else {
+      events::TriggerEvent(events::UiUnfocusedEvent{});
+    }
+  }
 }
 
 void ui::ImGuiLayer::Render(

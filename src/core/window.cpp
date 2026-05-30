@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include <GL/glext.h>
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan_core.h>
 
@@ -7,11 +8,13 @@
 #include <array>
 #include <format>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
 #include <vulkan/vulkan_raii.hpp>
 
-#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/events/event_manager.h"
+#include "rheo-sph/src/events/keyboard_event.h"
+#include "rheo-sph/src/events/mouse_event.h"
+#include "rheo-sph/src/events/window_event.h"
 #include "vulkan_device.h"
 
 #if defined(__linux__)
@@ -56,18 +59,68 @@ core::Window::Window(const WindowProperties properties) {
   }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
   window_ = glfwCreateWindow(properties.width, properties.height,
                              properties.title, nullptr, nullptr);
   if (window_ == nullptr) {
     throw std::runtime_error("[ERROR] GLFW: failed to create window");
   }
 
-  glfwSetWindowUserPointer(window_, static_cast<void*>(&input_events_));
-  glfwSetKeyCallback(window_, KeyCallback);
-  glfwSetCursorPosCallback(window_, CursorPosCallback);
-  glfwSetMouseButtonCallback(window_, MouseButtonCallback);
-  glfwSetScrollCallback(window_, ScrollCallback);
+  glfwSetWindowSizeCallback(
+      window_, [](GLFWwindow* /*window*/, int width, int height) {
+        events::TriggerEvent(events::WindowResizedEvent(width, height));
+      });
+
+  glfwSetKeyCallback(window_, [](GLFWwindow* /*window*/, int key,
+                                 int /*scancode*/, int action, int /*mods*/) {
+    switch (action) {
+      case GLFW_PRESS:
+        events::TriggerEvent(events::KeyPressedEvent(key, 0));
+        break;
+      case GLFW_REPEAT:
+        events::TriggerEvent(events::KeyPressedEvent(key, 1));
+        break;
+      case GLFW_RELEASE:
+        events::TriggerEvent(events::KeyReleasedEvent(key));
+        break;
+      default:
+        return;
+    }
+  });
+
+  glfwSetCursorPosCallback(
+      window_, [](GLFWwindow* /*window*/, double xpos, double ypos) {
+        events::TriggerEvent(events::MouseMovedEvent(static_cast<float>(xpos),
+                                                     static_cast<float>(ypos)));
+      });
+
+  glfwSetMouseButtonCallback(window_, [](GLFWwindow* /*window*/,
+                                         int button,  // NOLINT
+                                         int action, int /*mods*/) {
+    switch (action) {
+      case GLFW_PRESS:
+        events::TriggerEvent(events::MouseButtonPressedEvent(button, 0));
+        break;
+      case GLFW_REPEAT:
+        events::TriggerEvent(events::MouseButtonPressedEvent(button, 1));
+        break;
+      case GLFW_RELEASE:
+        events::TriggerEvent(events::MouseButtonReleasedEvent(button));
+        break;
+      default:
+        return;
+    }
+  });
+
+  glfwSetScrollCallback(
+      window_, [](GLFWwindow* window, double /*xoffset*/, double yoffset) {
+        double xpos = 0;
+        double ypos = 0;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
+        events::TriggerEvent(
+            events::MouseScrolledEvent(static_cast<float>(yoffset)));
+      });
 }
 
 core::Window::~Window() {
@@ -119,19 +172,6 @@ core::WindowSize core::Window::Size() const {
 
 void core::Window::WaitEvents() { glfwWaitEvents(); }
 
-core::InputState core::Window::DrainInputEvents() {
-  InputState drained;
-  drained.modifiers = input_events_.modifiers;
-  drained.mouse_drag_event = input_events_.mouse_drag_event;
-  drained.scroll_event = input_events_.scroll_event;
-  drained.pressed_keys = input_events_.pressed_keys;
-
-  input_events_.scroll_event = std::nullopt;
-  input_events_.pressed_keys.clear();
-
-  return drained;
-}
-
 vk::SurfaceCapabilitiesKHR core::Window::Capabilities(
     VulkanDevice const& vulkan_device) const {
   return vulkan_device.PhysicalDevice().getSurfaceCapabilitiesKHR(*surface_);
@@ -145,133 +185,6 @@ std::vector<vk::SurfaceFormatKHR> core::Window::Formats(
 std::vector<vk::PresentModeKHR> core::Window::PresentModes(
     VulkanDevice const& vulkan_device) const {
   return vulkan_device.PhysicalDevice().getSurfacePresentModesKHR(*surface_);
-}
-
-void core::Window::SetEventCallbacks() {
-  glfwSetKeyCallback(window_, KeyCallback);
-}
-
-namespace {
-void HandleModifierKey(core::InputState* input_events, int key, int action) {
-  switch (key) {
-    case GLFW_KEY_LEFT_SHIFT:
-    case GLFW_KEY_RIGHT_SHIFT:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->modifiers.shift = true;
-      } else if (action == GLFW_RELEASE) {
-        input_events->modifiers.shift = false;
-      }
-      break;
-    case GLFW_KEY_LEFT_CONTROL:
-    case GLFW_KEY_RIGHT_CONTROL:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->modifiers.control = true;
-      } else if (action == GLFW_RELEASE) {
-        input_events->modifiers.control = false;
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-void HandleActionKey(GLFWwindow* window, core::InputState* input_events,
-                     int key, int action, int mods) {
-  switch (key) {
-    case GLFW_KEY_F1:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->pressed_keys.push_back(core::Key::kF1);
-      }
-      break;
-    case GLFW_KEY_F4:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        if ((mods & GLFW_MOD_ALT) != 0) {
-          glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
-      }
-      break;
-    case GLFW_KEY_O:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->pressed_keys.push_back(core::Key::kO);
-      }
-      break;
-    case GLFW_KEY_S:
-      if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        input_events->pressed_keys.push_back(core::Key::kS);
-      }
-      break;
-    default:
-      break;
-  }
-}
-}  // namespace
-
-void core::Window::KeyCallback(GLFWwindow* window, int key, int /*scancode*/,
-                               int action, int mods) {
-  InputState* input_events = nullptr;
-  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
-  HandleModifierKey(input_events, key, action);
-  HandleActionKey(window, input_events, key, action, mods);
-}
-
-void core::Window::CursorPosCallback(GLFWwindow* window, double xpos,
-                                     double ypos) {
-  InputState* input_events = nullptr;
-  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
-
-  auto mouse_drag_opt = input_events->mouse_drag_event;
-  if (!mouse_drag_opt.has_value()) {
-    return;
-  }
-
-  mouse_drag_opt->current_position = CursorPosition{.x = xpos, .y = ypos};
-  input_events->mouse_drag_event = mouse_drag_opt;
-}
-
-void core::Window::MouseButtonCallback(GLFWwindow* window,
-                                       int button,  // NOLINT
-                                       int action, int /*mods*/) {
-  InputState* input_events = nullptr;
-  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
-    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-      // Operate on a local copy of the optional to avoid dereferencing a
-      // disengaged optional if it changes concurrently between checks.
-      auto mouse_drag_opt = input_events->mouse_drag_event;
-      if (mouse_drag_opt.has_value()) {
-        if (mouse_drag_opt->current_position.has_value()) {
-          mouse_drag_opt->anchor_position = *mouse_drag_opt->current_position;
-          mouse_drag_opt->current_position = std::nullopt;
-        }
-        input_events->mouse_drag_event = mouse_drag_opt;
-        return;
-      }
-
-      double xpos = 0;
-      double ypos = 0;
-      glfwGetCursorPos(window, &xpos, &ypos);
-      input_events->mouse_drag_event = core::MouseDragEvent{
-          .anchor_position = CursorPosition{.x = xpos, .y = ypos},
-          .current_position = std::nullopt};
-    } else if (action == GLFW_RELEASE) {
-      input_events->mouse_drag_event = std::nullopt;
-    }
-  }
-}
-
-void core::Window::ScrollCallback(GLFWwindow* window, double xoffset,
-                                  double yoffset) {
-  InputState* input_events = nullptr;
-  input_events = static_cast<InputState*>(glfwGetWindowUserPointer(window));
-
-  double xpos = 0;
-  double ypos = 0;
-  glfwGetCursorPos(window, &xpos, &ypos);
-  input_events->scroll_event = ScrollEvent{
-      .cursor_position = CursorPosition{.x = xpos, .y = ypos},
-      .delta_x = xoffset,
-      .delta_y = yoffset,
-  };
 }
 
 void core::Window::ErrorCallback(int error, const char* description) {

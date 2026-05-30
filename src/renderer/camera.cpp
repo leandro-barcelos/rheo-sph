@@ -10,55 +10,200 @@
 #include <numbers>
 #include <optional>
 
-#include "rheo-sph/src/core/input_events.h"
+#include "rheo-sph/src/core/mouse_codes.h"
+#include "rheo-sph/src/events/event_manager.h"
+#include "rheo-sph/src/events/keyboard_event.h"
+#include "rheo-sph/src/events/mouse_event.h"
+#include "rheo-sph/src/events/ui_event.h"
+#include "rheo-sph/src/events/window_event.h"
 
-void renderer::Camera::ProcessMouseDragEvent(
-    core::WindowSize const& window_size,
-    core::MouseDragEvent const& mouse_drag) {
-  if (!mouse_drag.current_position.has_value()) {
-    pan_anchor_world_ =
-        RaycastToPlane(window_size, mouse_drag.anchor_position.x,
-                       mouse_drag.anchor_position.y);
+renderer::Camera::Camera(glm::vec3 position,
+                         core::WindowSize initial_window_size)
+    : position_(position),
+      front_(0.0F, -1.0F, 0.0F),
+      up_(0.0F, 0.0F, -1.0F),
+      right_(1.0F, 0.0F, 0.0F),
+      world_up_(0.0F, 1.0F, 0.0F),
+      window_size_(initial_window_size) {
+  mouse_button_pressed_handler_ =
+      [this](events::MouseButtonPressedEvent const& event) {
+        OnMouseButtonPressedEvent(event);
+      };
+  mouse_button_released_handler_ =
+      [this](events::MouseButtonReleasedEvent const& event) {
+        OnMouseButtonReleasedEvent(event);
+      };
+  mouse_scrolled_handler_ = [this](events::MouseScrolledEvent const& event) {
+    OnMouseScrolledEvent(event);
+  };
+  mouse_moved_handler_ = [this](events::MouseMovedEvent const& event) {
+    OnMouseMovedEvent(event);
+  };
+
+  key_pressed_handler_ = [this](events::KeyPressedEvent const& event) {
+    OnKeyPressedEvent(event);
+  };
+  key_released_handler_ = [this](events::KeyReleasedEvent const& event) {
+    OnKeyReleasedEvent(event);
+  };
+  ui_focused_handler_ = [this](events::UiFocusedEvent const& event) {
+    OnUiFocusedEvent(event);
+  };
+  ui_unfocused_handler_ = [this](events::UiUnfocusedEvent const& event) {
+    OnUiUnfocusedEvent(event);
+  };
+  window_resized_handler_ = [this](events::WindowResizedEvent const& event) {
+    OnWindowResizedEvent(event);
+  };
+
+  events::Subscribe<events::MouseButtonPressedEvent>(
+      mouse_button_pressed_handler_);
+  events::Subscribe<events::MouseButtonReleasedEvent>(
+      mouse_button_released_handler_);
+  events::Subscribe<events::MouseScrolledEvent>(mouse_scrolled_handler_);
+  events::Subscribe<events::MouseMovedEvent>(mouse_moved_handler_);
+  events::Subscribe<events::KeyPressedEvent>(key_pressed_handler_);
+  events::Subscribe<events::KeyReleasedEvent>(key_released_handler_);
+  events::Subscribe<events::UiFocusedEvent>(ui_focused_handler_);
+  events::Subscribe<events::UiUnfocusedEvent>(ui_unfocused_handler_);
+  events::Subscribe<events::WindowResizedEvent>(window_resized_handler_);
+}
+
+renderer::Camera::~Camera() {
+  events::Unsubscribe<events::MouseButtonPressedEvent>(
+      mouse_button_pressed_handler_);
+  events::Unsubscribe<events::MouseButtonReleasedEvent>(
+      mouse_button_released_handler_);
+  events::Unsubscribe<events::MouseScrolledEvent>(mouse_scrolled_handler_);
+  events::Unsubscribe<events::MouseMovedEvent>(mouse_moved_handler_);
+  events::Unsubscribe<events::KeyPressedEvent>(key_pressed_handler_);
+  events::Unsubscribe<events::KeyReleasedEvent>(key_released_handler_);
+  events::Unsubscribe<events::UiFocusedEvent>(ui_focused_handler_);
+  events::Unsubscribe<events::UiUnfocusedEvent>(ui_unfocused_handler_);
+  events::Unsubscribe<events::WindowResizedEvent>(window_resized_handler_);
+}
+
+void renderer::Camera::OnMouseButtonPressedEvent(
+    events::MouseButtonPressedEvent const& event) {
+  if (ui_focused_) {
     return;
   }
 
-  if (!pan_anchor_world_.has_value()) {
+  if (event.GetButton() == core::MouseCode::kButtonLeft) {
+    mouse_left_button_held_ = true;
+  }
+}
+
+void renderer::Camera::OnMouseButtonReleasedEvent(
+    events::MouseButtonReleasedEvent const& event) {
+  if (ui_focused_) {
     return;
   }
 
+  if (event.GetButton() == core::MouseCode::kButtonLeft) {
+    mouse_left_button_held_ = false;
+    current_mouse_screen_position_ = std::nullopt;
+  }
+}
+
+void renderer::Camera::OnMouseScrolledEvent(
+    events::MouseScrolledEvent const& event) {
+  if (ui_focused_) {
+    return;
+  }
+
+  if (!is_control_pressed_) {
+    return;
+  }
+
+  float scroll_y_offset = event.GetYOffset();
+
+  constexpr float kMinZoom = 5.0F;
+  constexpr float kMaxZoom = 120.0F;
+
+  zoom_ -= scroll_y_offset * mouse_sensitivity_;
+  zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
+
+  scroll_y_offset = 0.0F;
+}
+
+void renderer::Camera::OnMouseMovedEvent(events::MouseMovedEvent const& event) {
+  if (ui_focused_) {
+    return;
+  }
+
+  if (!mouse_left_button_held_) {
+    return;
+  }
+
+  if (!current_mouse_screen_position_.has_value()) {
+    current_mouse_screen_position_ =
+        glm::vec2(event.GetMouseX(), event.GetMouseY());
+    return;
+  }
+
+  auto prev_mouse_screen_position = *current_mouse_screen_position_;
+
+  current_mouse_screen_position_ =
+      glm::vec2(event.GetMouseX(), event.GetMouseY());
+
+  auto pan_anchor_world = RaycastToPlane(prev_mouse_screen_position[0],
+                                         prev_mouse_screen_position[1]);
   auto current_position_world =
-      RaycastToPlane(window_size, mouse_drag.current_position->x,
-                     mouse_drag.current_position->y);
+      RaycastToPlane(current_mouse_screen_position_.value()[0],
+                     current_mouse_screen_position_.value()[1]);
 
-  if (!current_position_world.has_value()) {
+  if (!pan_anchor_world.has_value() || !current_position_world.has_value()) {
     return;
   }
 
-  auto delta = *pan_anchor_world_ - *current_position_world;
+  auto delta = *pan_anchor_world - *current_position_world;
   position_ += delta;
 }
 
-void renderer::Camera::ProcessScrollEvent(
-    core::ScrollEvent const& scroll, core::InputModifiers const& modifiers) {
-  if (modifiers.control) {
-    ProcessZoom(static_cast<float>(scroll.delta_y));
-  }
-}
-
-void renderer::Camera::ProcessInput(core::WindowSize const& window_size,
-                                    core::InputState const& input_state,
-                                    bool ignore_mouse_events) {
-  if (ignore_mouse_events) {
+void renderer::Camera::OnWindowResizedEvent(
+    events::WindowResizedEvent const& event) {
+  if (event.GetWidth() <= 0 || event.GetHeight() <= 0) {
     return;
   }
 
-  if (input_state.mouse_drag_event.has_value()) {
-    ProcessMouseDragEvent(window_size, *input_state.mouse_drag_event);
-  } else {
-    pan_anchor_world_ = std::nullopt;
-    if (input_state.scroll_event.has_value()) {
-      ProcessScrollEvent(*input_state.scroll_event, input_state.modifiers);
-    }
+  window_size_ = {.width = event.GetWidth(), .height = event.GetHeight()};
+}
+
+void renderer::Camera::OnUiFocusedEvent(
+    events::UiFocusedEvent const& /*event*/) {
+  ui_focused_ = true;
+  mouse_left_button_held_ = false;
+  current_mouse_screen_position_ = std::nullopt;
+}
+
+void renderer::Camera::OnUiUnfocusedEvent(
+    events::UiUnfocusedEvent const& /*event*/) {
+  ui_focused_ = false;
+  mouse_left_button_held_ = false;
+  current_mouse_screen_position_ = std::nullopt;
+}
+
+void renderer::Camera::OnKeyPressedEvent(events::KeyPressedEvent const& event) {
+  switch (event.GetKey()) {
+    case core::kLeftControl:
+    case core::kRightControl:
+      is_control_pressed_ = true;
+      break;
+    default:
+      break;
+  }
+}
+
+void renderer::Camera::OnKeyReleasedEvent(
+    events::KeyReleasedEvent const& event) {
+  switch (event.GetKey()) {
+    case core::kLeftControl:
+    case core::kRightControl:
+      is_control_pressed_ = false;
+      break;
+    default:
+      break;
   }
 }
 
@@ -99,11 +244,11 @@ void renderer::Camera::InitTopView(glm::vec3 const& bounds_min,
 }
 
 std::optional<glm::vec3> renderer::Camera::RaycastToTerrain(
-    core::WindowSize const& window_size, double xpos, double ypos,
+    double xpos, double ypos,
     std::vector<resources::Elevation> const& elevation_samples,
     uint32_t dem_width, uint32_t dem_height, float step) const {
-  auto near_point = ScreenToWorldPosition(window_size, xpos, ypos, 0.0F);
-  auto far_point = ScreenToWorldPosition(window_size, xpos, ypos, 1.0F);
+  auto near_point = ScreenToWorldPosition(xpos, ypos, 0.0F);
+  auto far_point = ScreenToWorldPosition(xpos, ypos, 1.0F);
 
   if (elevation_samples.empty() || dem_width == 0 || dem_height == 0 ||
       step <= 0.0F) {
@@ -136,30 +281,19 @@ std::optional<glm::vec3> renderer::Camera::RaycastToTerrain(
   return std::nullopt;
 }
 
-void renderer::Camera::ProcessScrollPan(float x_offset, float y_offset) {
-  position_ -= (right_ * x_offset + up_ * -y_offset) * movement_speed_;
-}
-
-void renderer::Camera::ProcessZoom(float z_offset) {
-  constexpr float kMinZoom = 5.0F;
-  constexpr float kMaxZoom = 120.0F;
-
-  zoom_ -= z_offset * mouse_sensitivity_;
-  zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
-}
-
-glm::vec3 renderer::Camera::ScreenToWorldPosition(
-    core::WindowSize const& window_size, double xpos, double ypos,
-    float depth_ndc) const {
-  float const aspect = static_cast<float>(window_size.width) /
-                       static_cast<float>(window_size.height);
+glm::vec3 renderer::Camera::ScreenToWorldPosition(double xpos, double ypos,
+                                                  float depth_ndc) const {
+  int const window_width = std::max(window_size_.width, 1);
+  int const window_height = std::max(window_size_.height, 1);
+  float const aspect =
+      static_cast<float>(window_width) / static_cast<float>(window_height);
 
   // Reconstruct NDC — Vulkan is [-1,1] x [-1,1] x [0,1]
   float const ndc_x = ((static_cast<float>(std::floor(xpos)) + 0.5F) /
-                       static_cast<float>(window_size.width) * 2.0F) -
+                       static_cast<float>(window_width) * 2.0F) -
                       1.0F;
   float const ndc_y = 1.0F - ((static_cast<float>(std::floor(ypos)) + 0.5F) /
-                              static_cast<float>(window_size.height) * 2.0F);
+                              static_cast<float>(window_height) * 2.0F);
 
   glm::mat4 const inv = glm::inverse(ProjectionMatrix(aspect) * ViewMatrix());
 
@@ -170,11 +304,11 @@ glm::vec3 renderer::Camera::ScreenToWorldPosition(
   return glm::vec3{world};
 }
 
-std::optional<glm::vec3> renderer::Camera::RaycastToPlane(
-    core::WindowSize const& window_size, double xpos, double ypos,
-    float plane_y) const {
-  auto near_point = ScreenToWorldPosition(window_size, xpos, ypos, 0.0F);
-  auto far_point = ScreenToWorldPosition(window_size, xpos, ypos, 1.0F);
+std::optional<glm::vec3> renderer::Camera::RaycastToPlane(double xpos,
+                                                          double ypos,
+                                                          float plane_y) const {
+  auto near_point = ScreenToWorldPosition(xpos, ypos, 0.0F);
+  auto far_point = ScreenToWorldPosition(xpos, ypos, 1.0F);
 
   glm::vec3 const ray_dir = glm::normalize(far_point - near_point);
 
