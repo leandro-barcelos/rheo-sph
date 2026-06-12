@@ -2,5 +2,18 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../HOM" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../PolyStation" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../PolyStation/external/GSL" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../PolyStation/external/SDL" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../PolyStation/external/imgui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../PolyStation/external/spdlog" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../RheoSPH-DOCS/Vulkan-Tutorial" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../SPH-TailingsDamFailure" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../fullwireless" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../fullwireless-ux" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../nds" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/external/imgui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/external/imgui-file-dialog" vcs="Git" />
   </component>
 </project>

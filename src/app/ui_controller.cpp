@@ -188,10 +188,9 @@ UiIntent UiController::Draw(bool simulation_running) {
   bool parameters_changed = parameters_panel_.Draw();
   ui::ParametersPanel::Events menu_events = parameters_panel_.GetEvents();
 
-  intent.quit_app = menu_events.quit_requested;
-
   if (menu_events.uploaded_dem_texture_path.has_value() &&
       !menu_events.uploaded_dem_texture_path->empty()) {
+    // TODO: When DEM and resolution are set
     if (LoadElevationSamples(
             *menu_events.uploaded_dem_texture_path, pending_elevation_samples_,
             pending_elevation_dimensions_,
@@ -202,20 +201,20 @@ UiIntent UiController::Draw(bool simulation_running) {
       intent.elevation_changed = true;
       intent.elevation_samples = pending_elevation_samples_;
       intent.elevation_dimensions = pending_elevation_dimensions_;
-      intent.dem_texture_path = pending_elevation_texture_path_;
+      intent.dem_file_path = pending_elevation_texture_path_;
     }
     intent.parameters_changed = true;
   }
 
-  if (menu_events.uploaded_visualization_texture_path.has_value() &&
-      !menu_events.uploaded_visualization_texture_path->empty()) {
+  if (menu_events.uploaded_terrain_texture_path.has_value() &&
+      !menu_events.uploaded_terrain_texture_path->empty()) {
     pending_terrain_texture_path_ =
-        *menu_events.uploaded_visualization_texture_path;
-    parameters_panel_.SetVisualizationTexturePath(
-        *menu_events.uploaded_visualization_texture_path);
+        *menu_events.uploaded_terrain_texture_path;
+    parameters_panel_.SetTerrainTexturePath(
+        *menu_events.uploaded_terrain_texture_path);
     intent.parameters_changed = true;
     intent.terrain_texture_changed = true;
-    intent.visualization_texture_path = pending_terrain_texture_path_;
+    intent.terrain_texture_path = pending_terrain_texture_path_;
   }
 
   if (menu_events.save_simulation_path.has_value() &&
@@ -242,7 +241,7 @@ UiIntent UiController::Draw(bool simulation_running) {
       pending_elevation_texture_path_ = loaded->elevation_texture_path;
       pending_terrain_texture_path_ = loaded->terrain_texture_path;
       parameters_panel_.SetDEMTexturePath(loaded->elevation_texture_path);
-      parameters_panel_.SetVisualizationTexturePath(
+      parameters_panel_.SetTerrainTexturePath(
           loaded->terrain_texture_path);
       parameters_panel_.SetSimulationConfigPath(*intent.load_path);
 
@@ -250,8 +249,8 @@ UiIntent UiController::Draw(bool simulation_running) {
       intent.terrain_texture_changed = !loaded->terrain_texture_path.empty();
       intent.elevation_samples = pending_elevation_samples_;
       intent.elevation_dimensions = pending_elevation_dimensions_;
-      intent.dem_texture_path = pending_elevation_texture_path_;
-      intent.visualization_texture_path = pending_terrain_texture_path_;
+      intent.dem_file_path = pending_elevation_texture_path_;
+      intent.terrain_texture_path = pending_terrain_texture_path_;
       intent.sim_action = UiIntent::SimAction::kPause;
       intent.parameters_changed = true;
     }

@@ -34,8 +34,8 @@ struct UiIntent {
   enum class SimAction : std::uint8_t { kNone, kPlay, kPause, kReset };
   std::shared_ptr<const std::vector<resources::Elevation>> elevation_samples;
   std::array<uint32_t, 2> elevation_dimensions{0U, 0U};
-  std::string dem_texture_path;
-  std::string visualization_texture_path;
+  std::string dem_file_path;
+  std::string terrain_texture_path;
 
   std::optional<simulation::FluidSimulator::Parameters> built_parameters;
   std::optional<std::string> save_path;
@@ -44,8 +44,6 @@ struct UiIntent {
   bool parameters_changed = false;
   bool elevation_changed = false;
   bool terrain_texture_changed = false;
-
-  bool quit_app = false;
 };
 
 class UiController {
