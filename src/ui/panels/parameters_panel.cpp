@@ -1,14 +1,10 @@
 #include "parameters_panel.h"
 
 #include <filesystem>
-#include <memory>
 
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
-#include "rheo-sph/src/events/app_event.h"
 #include "rheo-sph/src/events/event_manager.h"
-#include "rheo-sph/src/events/file_event.h"
-#include "rheo-sph/src/events/parameter_event.h"
 
 ui::ParametersPanel::ParametersPanel() {
   key_pressed_handler_ = [this](events::KeyPressedEvent const& event) {
@@ -133,8 +129,9 @@ void ui::ParametersPanel::MenuBar() {
   if (ImGui::BeginMenu("File")) {
     if (ImGui::MenuItem("New", "")) {
       values_ = Values{};
-      dem_file_path_.clear();
-      terrain_texture_path_.clear();
+      events_ = Events{};
+      dem_texture_path_.clear();
+      visualization_texture_path_.clear();
       simulation_config_path_.clear();
       help_modal_opened_ = false;
       menu_changed_ = true;
@@ -153,7 +150,7 @@ void ui::ParametersPanel::MenuBar() {
     if (ImGui::MenuItem("Select DEM")) {
       IGFD::FileDialogConfig config{};
       config.path = std::filesystem::current_path().string();
-      config.filePathName = dem_file_path_;
+      config.filePathName = dem_texture_path_;
       config.flags = ImGuiFileDialogFlags_Modal;
 
       ImGuiFileDialog::Instance()->OpenDialog(
@@ -161,14 +158,14 @@ void ui::ParametersPanel::MenuBar() {
           "GeoTiff files{.tif,.tiff},.*", config);
     }
 
-    if (ImGui::MenuItem("Select terrain texture")) {
+    if (ImGui::MenuItem("Select visualization texture")) {
       IGFD::FileDialogConfig config{};
       config.path = std::filesystem::current_path().string();
-      config.filePathName = terrain_texture_path_;
+      config.filePathName = visualization_texture_path_;
       config.flags = ImGuiFileDialogFlags_Modal;
 
       ImGuiFileDialog::Instance()->OpenDialog(
-          kUploadTerrainDialogKey, "Upload Terrain Texture",
+          kUploadTerrainDialogKey, "Upload Visualization Texture",
           "Image files{.png,.jpg,.jpeg,.bmp,.tga,.tif,.tiff},.*", config);
     }
 
@@ -182,7 +179,7 @@ void ui::ParametersPanel::MenuBar() {
     ImGui::Separator();
 
     if (ImGui::MenuItem("Quit", "ALT+F4")) {
-      events::QueueEvent(std::make_unique<events::QuitRequestedEvent>());
+      events_.quit_requested = true;
     }
     ImGui::EndMenu();
   }
@@ -216,14 +213,16 @@ bool ui::ParametersPanel::TerrainTab() {
   bool changed = false;
 
   if (ImGui::BeginTabItem("Terrain")) {
-    char* dem = dem_file_path_.data();
+    char* dem = dem_texture_path_.data();
     ImGui::InputText("DEM", dem, 255, ImGuiInputTextFlags_ReadOnly);
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip("Path to the DEM file");
     }
 
-    if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution_, 1, 10)) {
-      events::TriggerEvent(events::DEMResolutionChangedEvent(dem_resolution_));
+    float dem_resolution = values_.dem_resolution.value_or(10.0F);
+    if (ImGui::InputFloat("DEM Resolution (m)", &dem_resolution, 1, 10)) {
+      values_.dem_resolution = dem_resolution;
+      changed = true;
     }
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip("m/pixel");
@@ -231,11 +230,11 @@ bool ui::ParametersPanel::TerrainTab() {
 
     ImGui::Spacing();
 
-    char* terrain_texture = terrain_texture_path_.data();
-    ImGui::InputText("Terrain Texture", terrain_texture, 255,
+    char* visualization_texture = visualization_texture_path_.data();
+    ImGui::InputText("Visualization Texture", visualization_texture, 255,
                      ImGuiInputTextFlags_ReadOnly);
     if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Path to the terrain texture");
+      ImGui::SetTooltip("Path to the visualization texture");
     }
 
     ImGui::EndTabItem();
@@ -383,9 +382,8 @@ void ui::ParametersPanel::DisplayFileDialogs() {
           kUploadDialogKey, ImGuiWindowFlags_NoCollapse, ImVec2(600.0F, 450.0F),
           ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
-      dem_file_path_ = ImGuiFileDialog::Instance()->GetFilePathName();
-      events::TriggerEvent(events::DEMFileUploadedEvent(dem_file_path_));
-      ;
+      events_.uploaded_dem_texture_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
   }
@@ -394,8 +392,8 @@ void ui::ParametersPanel::DisplayFileDialogs() {
           kUploadTerrainDialogKey, ImGuiWindowFlags_NoCollapse,
           ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
-      events::TriggerEvent(events::TerrainTextureUploadedEvent(
-          ImGuiFileDialog::Instance()->GetFilePathName()));
+      events_.uploaded_visualization_texture_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
   }
@@ -404,8 +402,8 @@ void ui::ParametersPanel::DisplayFileDialogs() {
           kSaveSimulationDialogKey, ImGuiWindowFlags_NoCollapse,
           ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
-      events::TriggerEvent(events::SimulationFileLoadedEvent(
-          ImGuiFileDialog::Instance()->GetFilePathName()));
+      events_.save_simulation_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
   }
@@ -414,8 +412,8 @@ void ui::ParametersPanel::DisplayFileDialogs() {
           kLoadSimulationDialogKey, ImGuiWindowFlags_NoCollapse,
           ImVec2(600.0F, 450.0F), ImVec2(700.0F, 525.0F))) {
     if (ImGuiFileDialog::Instance()->IsOk()) {
-      events::TriggerEvent(events::SimulationSaveRequestedEvent(
-          ImGuiFileDialog::Instance()->GetFilePathName()));
+      events_.load_simulation_path =
+          ImGuiFileDialog::Instance()->GetFilePathName();
     }
     ImGuiFileDialog::Instance()->Close();
   }

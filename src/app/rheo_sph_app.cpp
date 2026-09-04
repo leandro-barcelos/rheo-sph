@@ -2,48 +2,15 @@
 
 #include <GLFW/glfw3.h>
 
-#include <exception>
 #include <optional>
-#include <stdexcept>
 #include <vector>
 
 #include "../core/command_pool.h"
 #include "../core/vulkan_device.h"
 #include "../core/window.h"
 #include "../events/event_manager.h"
-#include "rheo-sph/src/events/app_event.h"
-#include "rheo-sph/src/events/file_event.h"
 #include "rheo-sph/src/events/window_event.h"
-#include "rheo-sph/src/resources/geotiff.h"
 #include "ui_controller.h"
-
-namespace {
-void LoadElevationSamples(
-    std::string const& elevation_texture_path,
-    std::shared_ptr<const std::vector<resources::Elevation>>& elevation_samples,
-    std::array<uint32_t, 2>& elevation_dimensions, float resolution_meters) {
-  if (elevation_texture_path.empty()) {
-    throw std::runtime_error("[ERROR] App: failed to load elevation texture!");
-  }
-
-  resources::GeoTiff geotiff(elevation_texture_path.c_str());
-  std::array<int, 3> const dimensions = geotiff.Dimensions();
-  if (dimensions[0] <= 0 || dimensions[1] <= 0 || dimensions[2] <= 0) {
-    throw std::runtime_error("[ERROR] App: failed to load elevation texture!");
-  }
-
-  std::vector<resources::Elevation> samples =
-      geotiff.Elevations(1, resolution_meters);
-  if (samples.empty()) {
-    throw std::runtime_error("[ERROR] App: failed to load elevation texture!");
-  }
-
-  elevation_dimensions = {static_cast<uint32_t>(dimensions[0]),
-                          static_cast<uint32_t>(dimensions[1])};
-  elevation_samples = std::make_shared<const std::vector<resources::Elevation>>(
-      std::move(samples));
-}
-}  // namespace
 
 app::RheoSPHApp::RheoSPHApp()
     : window_(kWindowProperties), renderer_(window_.Size()) {
@@ -57,27 +24,16 @@ app::RheoSPHApp::RheoSPHApp()
       [this](events::WindowResizedEvent const& event) {
         OnWindowResizedEvent(event);
       };
-  quit_requested_event_handler_ =
-      [this](events::QuitRequestedEvent const& /*event*/) {
-        should_close_ = true;
-      };
-  dem_file_uploaded_event_handler_ =
-      [this](events::DEMFileUploadedEvent const& event) {
-        dem_file_path_ = event.GetDEMFilePath();
-      };
 
   events::Subscribe<events::KeyPressedEvent>(key_pressed_event_handler_);
   events::Subscribe<events::KeyReleasedEvent>(key_released_event_handler_);
   events::Subscribe<events::WindowResizedEvent>(window_resized_event_handler_);
-  events::Subscribe<events::QuitRequestedEvent>(quit_requested_event_handler_);
 }
 
 app::RheoSPHApp::~RheoSPHApp() {
   events::Unsubscribe<events::KeyPressedEvent>(key_pressed_event_handler_);
   events::Unsubscribe<events::KeyReleasedEvent>(key_released_event_handler_);
   events::Unsubscribe(window_resized_event_handler_);
-  events::Unsubscribe<events::QuitRequestedEvent>(
-      quit_requested_event_handler_);
 }
 
 void app::RheoSPHApp::Run() {
@@ -149,18 +105,21 @@ void app::RheoSPHApp::MainLoop() {
 }
 
 void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
+  if (intent.quit_app) {
+    should_close_ = true;
+  }
+
   if (intent.save_path.has_value()) {
     (void)ui_controller_.SaveSimulationConfig(*intent.save_path);
   }
 
   // Reinitialize terrain when elevation data changed (upload or load)
   if (intent.elevation_changed && intent.elevation_samples != nullptr) {
-    // TODO: When DEM and resolution are set
     renderer_.InitTopViewCamera(intent.elevation_samples);
     std::optional<std::string> terrain_path_opt =
-        intent.terrain_texture_path.empty()
+        intent.visualization_texture_path.empty()
             ? std::nullopt
-            : std::optional<std::string>(intent.terrain_texture_path);
+            : std::optional<std::string>(intent.visualization_texture_path);
     renderer_.InitTerrainRenderer(
         vulkan_device_, vulkan_swap_chain_, intent.elevation_samples,
         intent.elevation_dimensions[0], intent.elevation_dimensions[1],
@@ -171,9 +130,9 @@ void app::RheoSPHApp::ProcessIntent(UiIntent const& intent) {
       auto const& built_parameters = *intent.built_parameters;
       renderer_.InitTopViewCamera(built_parameters.elevation_samples);
       std::optional<std::string> terrain_path_opt =
-          intent.terrain_texture_path.empty()
+          intent.visualization_texture_path.empty()
               ? std::nullopt
-              : std::optional<std::string>(intent.terrain_texture_path);
+              : std::optional<std::string>(intent.visualization_texture_path);
       renderer_.InitTerrainRenderer(
           vulkan_device_, vulkan_swap_chain_,
           built_parameters.elevation_samples, built_parameters.elevation_width,

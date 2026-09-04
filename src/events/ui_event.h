@@ -11,6 +11,8 @@ class UiFocusedEvent : public Event {
  public:
   EVENT_TYPE("UiFocusedEvent")
 
+  UiFocusedEvent() = default;
+
   [[nodiscard]] std::string ToString() const override {
     return "UiFocusedEvent";
   }
@@ -19,6 +21,8 @@ class UiFocusedEvent : public Event {
 class UiUnfocusedEvent : public Event {
  public:
   EVENT_TYPE("UiUnfocusedEvent")
+
+  UiUnfocusedEvent() = default;
 
   [[nodiscard]] std::string ToString() const override {
     return "UiUnfocusedEvent";

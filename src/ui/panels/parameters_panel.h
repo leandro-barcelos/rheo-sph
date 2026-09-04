@@ -20,9 +20,18 @@ class ParametersPanel {
   ParametersPanel();
   ~ParametersPanel();
 
+  struct Events {
+    std::optional<std::string> uploaded_dem_texture_path;
+    std::optional<std::string> uploaded_visualization_texture_path;
+    std::optional<std::string> save_simulation_path;
+    std::optional<std::string> load_simulation_path;
+    bool quit_requested = false;
+  } __attribute__((aligned(128)));
+
   struct Values {
     std::optional<float> total_fluid_volume;
     std::optional<float> initial_particle_spacing;
+    std::optional<float> dem_resolution;
     std::optional<uint32_t> voxel_max_particles;
     std::optional<float> viscosity;
     std::optional<float> rest_density;
@@ -39,13 +48,23 @@ class ParametersPanel {
 
   [[nodiscard]] Values const& GetValues() const { return values_; }
   void SetValues(Values const& values) { values_ = values; }
+  [[nodiscard]] Events const& GetEvents() const { return events_; }
+  void SetEvents(Events const& events) { events_ = events; }
+  void ClearEvents() { events_ = Events{}; }
+  void SetDEMTexturePath(std::string const& path) { dem_texture_path_ = path; }
+  void SetSimulationConfigPath(std::string const& path) {
+    simulation_config_path_ = path;
+  }
+  void SetVisualizationTexturePath(std::string const& path) {
+    visualization_texture_path_ = path;
+  }
 
  private:
+  Events events_{};
   Values values_{};
-  std::string dem_file_path_;
-  std::string terrain_texture_path_;
+  std::string dem_texture_path_;
+  std::string visualization_texture_path_;
   std::string simulation_config_path_;
-  float dem_resolution_{10.0F};
   bool help_modal_opened_ = false;
   bool menu_changed_ = false;
   bool is_control_pressed_ = false;
